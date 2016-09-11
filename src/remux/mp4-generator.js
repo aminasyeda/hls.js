@@ -344,9 +344,9 @@ class MP4 {
 
     var h265c = MP4.box(MP4.types.hvcC, new Uint8Array([
             0x01,   // version
-            sps[3], // profile
-            sps[4], // profile compat
-            sps[5], // level
+            sps[4], // profile
+            sps[5], // profile compat
+            sps[6], // level
             0xfc | 3, // lengthSizeMinusOne, hard-coded to 4 bytes
             0xE0 | track.sps.length // 3bit reserved (111) + numOfSequenceParameterSets
           ].concat(vps).concat(sps).concat([

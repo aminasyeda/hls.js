@@ -12,6 +12,7 @@
  import ADTS from './adts';
  import Event from '../events';
  import ExpGolomb from './exp-golomb';
+ import HEVCSpsParser from './hevc-sps-parser';
 // import Hex from '../utils/hex';
  import {logger} from '../utils/logger';
  import {ErrorTypes, ErrorDetails} from '../errors';
@@ -380,7 +381,7 @@
         samples = track.samples,
         units = this._parseHEVCNALu(pes.data),
         units2 = [],
-        debug = true,
+        debug = false,
         key = false,
         length = 0,
         // expGolombDecoder,
@@ -531,7 +532,6 @@
           track.vps = [unit.data];
           if(debug) {
             debugString += 'VPS ';
-
           }
           break;           
         //SPS
@@ -540,27 +540,14 @@
           if(debug) {
             debugString += 'SPS ';
           }
-          // if(!track.sps) {
-          //   expGolombDecoder = new ExpGolomb(unit.data);
-          //   var config = expGolombDecoder.readSPS();
-          //   track.width = config.width;
-          //   track.height = config.height;
-            track.width = 720;
-            track.height = 576;
-            track.sps = [unit.data];
-            track.duration = this._duration;
-            track.codec = 'hev1.1.6.L93.B0';
-          //   var codecarray = unit.data.subarray(1, 4);
-          //   var codecstring = 'avc1.';
-          //   for (i = 0; i < 3; i++) {
-          //     var h = codecarray[i].toString(16);
-          //     if (h.length < 2) {
-          //       h = '0' + h;
-          //     }
-          //     codecstring += h;
-          //   }
-          //   track.codec = codecstring;
-          // }
+          track.sps = [unit.data];
+
+          var hevcSPSParser = new HEVCSpsParser(unit.data);
+          var config = hevcSPSParser.readSPSHEVC();
+          track.width = config.width;
+          track.height = config.height;
+          track.duration = this._duration;
+          track.codec = 'hev1.1.6.L93.B0';
           break;
         //PPS
         case 34:
