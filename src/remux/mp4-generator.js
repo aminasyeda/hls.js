@@ -321,7 +321,7 @@ class MP4 {
       len = data.byteLength;
       vps.push((len >>> 8) & 0xFF);
       vps.push((len & 0xFF));
-      vps = sps.concat(Array.prototype.slice.call(data)); // SPS
+      vps = vps.concat(Array.prototype.slice.call(data)); // VPS
     }
 
     // assemble the SPSs
@@ -339,7 +339,7 @@ class MP4 {
       len = data.byteLength;
       pps.push((len >>> 8) & 0xFF);
       pps.push((len & 0xFF));
-      pps = pps.concat(Array.prototype.slice.call(data));
+      pps = pps.concat(Array.prototype.slice.call(data)); // PPS
     }
 
     var h265c = MP4.box(MP4.types.hvcC, new Uint8Array([
