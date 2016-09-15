@@ -548,6 +548,9 @@
           track.height = config.height;
           track.duration = this._duration;
           track.codec = 'hev1.1.6.L93.B0';
+          track.chromaFormatIdc = config.chromaFormatIdc;
+          track.bitDepthLumaMinus8 = config.bitDepthLumaMinus8;
+          track.bitDepthChromaMinus8 = config.bitDepthChromaMinus8;
           break;
         //PPS
         case 34:
