@@ -149,7 +149,10 @@ class HEVCSpsParser {
       spsId = 0,
       chromaFormatIdc = 0,
       width = 0,
-      height = 0;
+      height = 0,
+      conformanceWindowFlag = 0,
+      bitDepthLumaMinus8 = 0,
+      bitDepthChromaMinus8 = 0;
       
       
 
@@ -171,21 +174,22 @@ class HEVCSpsParser {
       width = this.readUE(); // pic_width_in_luma_samples
       height = this.readUE(); // pic_height_in_luma_samples
 
-      // conformanceWindowFlag = this.readBits2(1);
-      // if( conformanceWindowFlag === 1) {
-      //   this.skipUE2(); // conf_win_left_offset
-      //   this.skipUE2(); // conf_win_right_offset
-      //   this.skipUE2(); // conf_win_top_offset
-      //   this.skipUE2(); // conf_win_bottom_offset
-      // }
 
-      // this.skipUE2(); // bit_depth_luma_minus8
-      // this.skipUE2(); // bit_depth_chroma_minus8
-      // this.skipUE2(); // log2_max_pic_order_cnt_lsb_minus4
+      conformanceWindowFlag = this.readBits(1);
+      if( conformanceWindowFlag === 1) {
+         this.skipUE(); // conf_win_left_offset
+         this.skipUE(); // conf_win_right_offset
+         this.skipUE(); // conf_win_top_offset
+         this.skipUE(); // conf_win_bottom_offset
+      }
 
-      // this.readBits2(1);
+      bitDepthLumaMinus8 = this.readUE(); // bit_depth_luma_minus8
+      bitDepthChromaMinus8 = this.readUE(); // bit_depth_chroma_minus8
 
-      return { width : width, height : height };
+      return { width : width, height : height, 
+        chromaFormatIdc : chromaFormatIdc, 
+        bitDepthLumaMinus8 : bitDepthLumaMinus8, 
+        bitDepthChromaMinus8 :  bitDepthChromaMinus8 };
   }
 }
 

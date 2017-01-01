@@ -315,7 +315,9 @@ class MP4 {
   static hev1(track) {
     var vps = [], sps = [], pps = [], i, data, len;
 
-    // assemble the VPSs
+    vps.push(0x00);
+    vps.push(0x00);
+    vps.push(track.vps.length);
     for (i = 0; i < track.vps.length; i++) {
       data = track.vps[i];
       len = data.byteLength;
@@ -325,6 +327,9 @@ class MP4 {
     }
 
     // assemble the SPSs
+    sps.push(0x00);
+    sps.push(0x00);
+    sps.push(track.sps.length);
     for (i = 0; i < track.sps.length; i++) {
       data = track.sps[i];
       len = data.byteLength;
@@ -334,6 +339,9 @@ class MP4 {
     }
 
     // assemble the PPSs
+    pps.push(0x00);
+    pps.push(0x00);
+    pps.push(track.pps.length);
     for (i = 0; i < track.pps.length; i++) {
       data = track.pps[i];
       len = data.byteLength;
@@ -342,19 +350,20 @@ class MP4 {
       pps = pps.concat(Array.prototype.slice.call(data)); // PPS
     }
 
-    var h265c = MP4.box(MP4.types.hvcC, new Uint8Array([
-            0x01,   // version
-            sps[4], // profile
-            sps[5], // profile compat
-            sps[6], // level
-            0xfc | 3, // lengthSizeMinusOne, hard-coded to 4 bytes
-            0xE0 | track.sps.length // 3bit reserved (111) + numOfSequenceParameterSets
-          ].concat(vps).concat(sps).concat([
-            track.pps.length // numOfPictureParameterSets
-          ]).concat(pps))), // "PPS"
-        width = track.width,
-        height = track.height;
-    //console.log('avcc:' + Hex.hexDump(avcc));
+    var iNumArrays = track.vps.length + track.sps.length + track.pps.length;
+
+    var hvcc = MP4.box(MP4.types.hvcC, new Uint8Array([
+      0x01,   // version
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // general_configuration
+      0xf0, 0x00, // spatial segmentation
+      0xfc | track.chromaFormatIdc & 0x03,
+      0xf8 | track.bitDepthLumaMinus8 & 0x07,
+      0xf8 | track.bitDepthChromaMinus8 & 0x07,
+      0x00, 0x00, // framerate
+      0x00, // numTemporalLayer b_temporalIdNested
+      iNumArrays,
+      ].concat(vps).concat(sps).concat(pps)));
+
     return MP4.box(MP4.types.hev1, new Uint8Array([
         0x00, 0x00, 0x00, // reserved
         0x00, 0x00, 0x00, // reserved
@@ -364,10 +373,10 @@ class MP4 {
         0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00,
         0x00, 0x00, 0x00, 0x00, // pre_defined
-        (width >> 8) & 0xFF,
-        width & 0xff, // width
-        (height >> 8) & 0xFF,
-        height & 0xff, // height
+        (track.width >> 8) & 0xFF,
+        track.width & 0xff, // width
+        (track.height >> 8) & 0xFF,
+        track.height & 0xff, // height
         0x00, 0x48, 0x00, 0x00, // horizresolution
         0x00, 0x48, 0x00, 0x00, // vertresolution
         0x00, 0x00, 0x00, 0x00, // reserved
@@ -383,7 +392,7 @@ class MP4 {
         0x00, 0x00, 0x00, // compressorname
         0x00, 0x18,   // depth = 24
         0x11, 0x11]), // pre_defined = -1
-          h265c,
+           hvcc,
           MP4.box(MP4.types.btrt, new Uint8Array([
             0x00, 0x1c, 0x9c, 0x80, // bufferSizeDB
             0x00, 0x2d, 0xc6, 0xc0, // maxBitrate

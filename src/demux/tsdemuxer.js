@@ -440,6 +440,7 @@
           if(debug) {
             debugString += 'SLICE_TRAIL_R ';
           }
+          key = true;
           break;
         case 2:
           push = true;
@@ -452,6 +453,7 @@
           if(debug) {
             debugString += 'SLICE_TSA_R ';
           }
+          key = true;
           break;
         case 4:
           push = true;
@@ -464,6 +466,7 @@
           if(debug) {
             debugString += 'SLICE_STSA_R ';
           }
+          key = true;
           break;
         case 6:
           push = true;
@@ -476,6 +479,7 @@
           if(debug) {
             debugString += 'SLICE_RADL_R ';
           }
+          key = true;
           break;
         case 8:
           push = true;
@@ -488,6 +492,7 @@
           if(debug) {
             debugString += 'SLICE_RASL_R ';
           }
+          key = true;
           break; 
         case 16:
           push = true;
@@ -526,6 +531,7 @@
           if(debug) {
             debugString += 'SLICE_CRA_NUT ';
           }
+          key = true;
           break;
         case 32:
           push = true;
@@ -548,6 +554,9 @@
           track.height = config.height;
           track.duration = this._duration;
           track.codec = 'hev1.1.6.L93.B0';
+          track.chromaFormatIdc = config.chromaFormatIdc;
+          track.bitDepthLumaMinus8 = config.bitDepthLumaMinus8;
+          track.bitDepthChromaMinus8 = config.bitDepthChromaMinus8;
           break;
         //PPS
         case 34:
