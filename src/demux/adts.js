@@ -1,46 +1,62 @@
 /**
  *  ADTS parser helper
  */
-import { logger } from '../utils/logger';
-import { ErrorTypes, ErrorDetails } from '../errors';
+import {logger} from '../utils/logger';
+import {ErrorTypes, ErrorDetails} from '../errors';
 
-export function getAudioConfig(observer, data, offset, audioCodec) {
-  var adtsObjectType, // :int
-    adtsSampleingIndex, // :int
-    adtsExtensionSampleingIndex, // :int
-    adtsChanelConfig, // :int
-    config,
-    userAgent = navigator.userAgent.toLowerCase(),
-    manifestCodec = audioCodec,
-    adtsSampleingRates = [
-      96000, 88200,
-      64000, 48000,
-      44100, 32000,
-      24000, 22050,
-      16000, 12000,
-      11025, 8000,
-      7350];
-  // byte 2
-  adtsObjectType = ((data[offset + 2] & 0xC0) >>> 6) + 1;
-  adtsSampleingIndex = ((data[offset + 2] & 0x3C) >>> 2);
-  if (adtsSampleingIndex > adtsSampleingRates.length - 1) {
-    observer.trigger(Event.ERROR, { type: ErrorTypes.MEDIA_ERROR, details: ErrorDetails.FRAG_PARSING_ERROR, fatal: true, reason: `invalid ADTS sampling index:${adtsSampleingIndex}` });
-    return;
-  }
-  adtsChanelConfig = ((data[offset + 2] & 0x01) << 2);
-  // byte 3
-  adtsChanelConfig |= ((data[offset + 3] & 0xC0) >>> 6);
-  logger.log(`manifest codec:${audioCodec},ADTS data:type:${adtsObjectType},sampleingIndex:${adtsSampleingIndex}[${adtsSampleingRates[adtsSampleingIndex]}Hz],channelConfig:${adtsChanelConfig}`);
-  // firefox: freq less than 24kHz = AAC SBR (HE-AAC)
-  if (/firefox/i.test(userAgent)) {
-    if (adtsSampleingIndex >= 6) {
-      adtsObjectType = 5;
-      config = new Array(4);
-      // HE-AAC uses SBR (Spectral Band Replication) , high frequencies are constructed from low frequencies
-      // there is a factor 2 between frame sample rate and output sample rate
-      // multiply frequency by 2 (see table below, equivalent to substract 3)
-      adtsExtensionSampleingIndex = adtsSampleingIndex - 3;
-    } else {
+ class ADTS {
+
+  static getAudioConfig(observer, data, offset, audioCodec) {
+    var adtsObjectType, // :int
+        adtsSampleingIndex, // :int
+        adtsExtensionSampleingIndex, // :int
+        adtsChanelConfig, // :int
+        config,
+        userAgent, 
+        adtsSampleingRates = [
+            96000, 88200,
+            64000, 48000,
+            44100, 32000,
+            24000, 22050,
+            16000, 12000,
+            11025, 8000,
+            7350];
+    try {
+      userAgent = navigator.userAgent.toLowerCase();
+    }
+    catch(e)
+    {
+      userAgent = 'EDGE';
+    }
+    
+
+    // byte 2
+    adtsObjectType = ((data[offset + 2] & 0xC0) >>> 6) + 1;
+    adtsSampleingIndex = ((data[offset + 2] & 0x3C) >>> 2);
+    if(adtsSampleingIndex > adtsSampleingRates.length-1) {
+      observer.trigger(Event.ERROR, {type: ErrorTypes.MEDIA_ERROR, details: ErrorDetails.FRAG_PARSING_ERROR, fatal: true, reason: `invalid ADTS sampling index:${adtsSampleingIndex}`});
+      return;
+    }
+    adtsChanelConfig = ((data[offset + 2] & 0x01) << 2);
+    // byte 3
+    adtsChanelConfig |= ((data[offset + 3] & 0xC0) >>> 6);
+    logger.log(`manifest codec:${audioCodec},ADTS data:type:${adtsObjectType},sampleingIndex:${adtsSampleingIndex}[${adtsSampleingRates[adtsSampleingIndex]}Hz],channelConfig:${adtsChanelConfig}`);
+    // firefox: freq less than 24kHz = AAC SBR (HE-AAC)
+    if (userAgent.indexOf('firefox') !== -1) {
+      if (adtsSampleingIndex >= 6) {
+        adtsObjectType = 5;
+        config = new Array(4);
+        // HE-AAC uses SBR (Spectral Band Replication) , high frequencies are constructed from low frequencies
+        // there is a factor 2 between frame sample rate and output sample rate
+        // multiply frequency by 2 (see table below, equivalent to substract 3)
+        adtsExtensionSampleingIndex = adtsSampleingIndex - 3;
+      } else {
+        adtsObjectType = 2;
+        config = new Array(2);
+        adtsExtensionSampleingIndex = adtsSampleingIndex;
+      }
+      // Android : always use AAC
+    } else if (userAgent.indexOf('android') !== -1) {
       adtsObjectType = 2;
       config = new Array(2);
       adtsExtensionSampleingIndex = adtsSampleingIndex;

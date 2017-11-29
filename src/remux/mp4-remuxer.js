@@ -276,12 +276,29 @@ class MP4Remuxer {
 
     // compute lastPTS/lastDTS
     sample = inputSamples[inputSamples.length-1];
-    lastDTS =  Math.max(sample.dts,0);
-    lastPTS =  Math.max(sample.pts,0,lastDTS);
+    lastDTS = Math.max(this._PTSNormalize(sample.dts,nextAvcDts) - this._initDTS,0);
+    lastPTS = Math.max(this._PTSNormalize(sample.pts,nextAvcDts) - this._initDTS,0);
+    lastPTS = Math.max(lastPTS, lastDTS);
 
-      // on Safari let's signal the same sample duration for all samples
-      // sample duration (as expected by trun MP4 boxes), should be the delta between sample DTS
-      // set this constant duration as being the avg delta between consecutive DTS.
+    let vendor,
+        userAgent,
+        isSafari,
+        isChrome;
+    try {
+      vendor = navigator.vendor;
+      userAgent = navigator.userAgent;
+      isSafari = vendor && vendor.indexOf('Apple') > -1 && userAgent && !userAgent.match('CriOS');
+      isChrome = userAgent.toLowerCase().indexOf('chrome') > -1;
+    }
+    catch(e)
+    {
+      isSafari = 0;
+      isChrome = 0;
+    }
+
+    // on Safari let's signal the same sample duration for all samples
+    // sample duration (as expected by trun MP4 boxes), should be the delta between sample DTS
+    // set this constant duration as being the avg delta between consecutive DTS.
     if (isSafari) {
       mp4SampleDuration = Math.round((lastDTS-firstDTS)/(inputSamples.length-1));
     }
@@ -399,7 +416,7 @@ class MP4Remuxer {
     track.len = 0;
     track.nbNalu = 0;
     track.dropped = 0;
-    if(outputSamples.length && navigator.userAgent.toLowerCase().indexOf('chrome') > -1) {
+    if(outputSamples.length && isChrome) {
       let flags = outputSamples[0].flags;
     // chrome workaround, mark first sample as being a Random Access Point to avoid sourcebuffer append issue
     // https://code.google.com/p/chromium/issues/detail?id=229412
