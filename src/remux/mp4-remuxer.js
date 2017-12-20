@@ -205,10 +205,8 @@ class MP4Remuxer {
     // if parsed fragment is contiguous with last one, let's use last DTS value as reference
     let nextAvcDts = this.nextAvcDts;
 
-    const isSafari = this.isSafari;
-
     // Safari does not like overlapping DTS on consecutive fragments. let's use nextAvcDts to overcome this if fragments are consecutive
-    if (isSafari) {
+    if (this.isSafari) {
       // also consider consecutive fragments as being contiguous (even if a level switch occurs),
       // for sake of clarity:
       // consecutive fragments are frags with
