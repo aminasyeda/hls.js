@@ -7,7 +7,7 @@
 		exports["Hls"] = factory();
 	else
 		root["Hls"] = factory();
-})(this, function() {
+})(typeof self !== 'undefined' ? self : this, function() {
 return /******/ (function(modules) { // webpackBootstrap
 /******/ 	// The module cache
 /******/ 	var installedModules = {};
@@ -706,440 +706,6 @@ var utf8ArrayToStr = ID3._utf8ArrayToStr;
 
 /***/ }),
 /* 4 */
-/***/ (function(module, __webpack_exports__, __webpack_require__) {
-
-"use strict";
-
-// CONCATENATED MODULE: ./src/crypt/aes-crypto.js
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var AESCrypto = function () {
-  function AESCrypto(subtle, iv) {
-    _classCallCheck(this, AESCrypto);
-
-    this.subtle = subtle;
-    this.aesIV = iv;
-  }
-
-  AESCrypto.prototype.decrypt = function decrypt(data, key) {
-    return this.subtle.decrypt({ name: 'AES-CBC', iv: this.aesIV }, key, data);
-  };
-
-  return AESCrypto;
-}();
-
-/* harmony default export */ var aes_crypto = (AESCrypto);
-// CONCATENATED MODULE: ./src/crypt/fast-aes-key.js
-function fast_aes_key__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var FastAESKey = function () {
-  function FastAESKey(subtle, key) {
-    fast_aes_key__classCallCheck(this, FastAESKey);
-
-    this.subtle = subtle;
-    this.key = key;
-  }
-
-  FastAESKey.prototype.expandKey = function expandKey() {
-    return this.subtle.importKey('raw', this.key, { name: 'AES-CBC' }, false, ['encrypt', 'decrypt']);
-  };
-
-  return FastAESKey;
-}();
-
-/* harmony default export */ var fast_aes_key = (FastAESKey);
-// CONCATENATED MODULE: ./src/crypt/aes-decryptor.js
-function aes_decryptor__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-var AESDecryptor = function () {
-  function AESDecryptor() {
-    aes_decryptor__classCallCheck(this, AESDecryptor);
-
-    // Static after running initTable
-    this.rcon = [0x0, 0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
-    this.subMix = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
-    this.invSubMix = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
-    this.sBox = new Uint32Array(256);
-    this.invSBox = new Uint32Array(256);
-
-    // Changes during runtime
-    this.key = new Uint32Array(0);
-
-    this.initTable();
-  }
-
-  // Using view.getUint32() also swaps the byte order.
-
-
-  AESDecryptor.prototype.uint8ArrayToUint32Array_ = function uint8ArrayToUint32Array_(arrayBuffer) {
-    var view = new DataView(arrayBuffer);
-    var newArray = new Uint32Array(4);
-    for (var i = 0; i < 4; i++) {
-      newArray[i] = view.getUint32(i * 4);
-    }
-    return newArray;
-  };
-
-  AESDecryptor.prototype.initTable = function initTable() {
-    var sBox = this.sBox;
-    var invSBox = this.invSBox;
-    var subMix = this.subMix;
-    var subMix0 = subMix[0];
-    var subMix1 = subMix[1];
-    var subMix2 = subMix[2];
-    var subMix3 = subMix[3];
-    var invSubMix = this.invSubMix;
-    var invSubMix0 = invSubMix[0];
-    var invSubMix1 = invSubMix[1];
-    var invSubMix2 = invSubMix[2];
-    var invSubMix3 = invSubMix[3];
-
-    var d = new Uint32Array(256);
-    var x = 0;
-    var xi = 0;
-    var i = 0;
-    for (i = 0; i < 256; i++) {
-      if (i < 128) {
-        d[i] = i << 1;
-      } else {
-        d[i] = i << 1 ^ 0x11b;
-      }
-    }
-
-    for (i = 0; i < 256; i++) {
-      var sx = xi ^ xi << 1 ^ xi << 2 ^ xi << 3 ^ xi << 4;
-      sx = sx >>> 8 ^ sx & 0xff ^ 0x63;
-      sBox[x] = sx;
-      invSBox[sx] = x;
-
-      // Compute multiplication
-      var x2 = d[x];
-      var x4 = d[x2];
-      var x8 = d[x4];
-
-      // Compute sub/invSub bytes, mix columns tables
-      var t = d[sx] * 0x101 ^ sx * 0x1010100;
-      subMix0[x] = t << 24 | t >>> 8;
-      subMix1[x] = t << 16 | t >>> 16;
-      subMix2[x] = t << 8 | t >>> 24;
-      subMix3[x] = t;
-
-      // Compute inv sub bytes, inv mix columns tables
-      t = x8 * 0x1010101 ^ x4 * 0x10001 ^ x2 * 0x101 ^ x * 0x1010100;
-      invSubMix0[sx] = t << 24 | t >>> 8;
-      invSubMix1[sx] = t << 16 | t >>> 16;
-      invSubMix2[sx] = t << 8 | t >>> 24;
-      invSubMix3[sx] = t;
-
-      // Compute next counter
-      if (!x) {
-        x = xi = 1;
-      } else {
-        x = x2 ^ d[d[d[x8 ^ x2]]];
-        xi ^= d[d[xi]];
-      }
-    }
-  };
-
-  AESDecryptor.prototype.expandKey = function expandKey(keyBuffer) {
-    // convert keyBuffer to Uint32Array
-    var key = this.uint8ArrayToUint32Array_(keyBuffer);
-    var sameKey = true;
-    var offset = 0;
-
-    while (offset < key.length && sameKey) {
-      sameKey = key[offset] === this.key[offset];
-      offset++;
-    }
-
-    if (sameKey) {
-      return;
-    }
-
-    this.key = key;
-    var keySize = this.keySize = key.length;
-
-    if (keySize !== 4 && keySize !== 6 && keySize !== 8) {
-      throw new Error('Invalid aes key size=' + keySize);
-    }
-
-    var ksRows = this.ksRows = (keySize + 6 + 1) * 4;
-    var ksRow = void 0;
-    var invKsRow = void 0;
-
-    var keySchedule = this.keySchedule = new Uint32Array(ksRows);
-    var invKeySchedule = this.invKeySchedule = new Uint32Array(ksRows);
-    var sbox = this.sBox;
-    var rcon = this.rcon;
-
-    var invSubMix = this.invSubMix;
-    var invSubMix0 = invSubMix[0];
-    var invSubMix1 = invSubMix[1];
-    var invSubMix2 = invSubMix[2];
-    var invSubMix3 = invSubMix[3];
-
-    var prev = void 0;
-    var t = void 0;
-
-    for (ksRow = 0; ksRow < ksRows; ksRow++) {
-      if (ksRow < keySize) {
-        prev = keySchedule[ksRow] = key[ksRow];
-        continue;
-      }
-      t = prev;
-
-      if (ksRow % keySize === 0) {
-        // Rot word
-        t = t << 8 | t >>> 24;
-
-        // Sub word
-        t = sbox[t >>> 24] << 24 | sbox[t >>> 16 & 0xff] << 16 | sbox[t >>> 8 & 0xff] << 8 | sbox[t & 0xff];
-
-        // Mix Rcon
-        t ^= rcon[ksRow / keySize | 0] << 24;
-      } else if (keySize > 6 && ksRow % keySize === 4) {
-        // Sub word
-        t = sbox[t >>> 24] << 24 | sbox[t >>> 16 & 0xff] << 16 | sbox[t >>> 8 & 0xff] << 8 | sbox[t & 0xff];
-      }
-
-      keySchedule[ksRow] = prev = (keySchedule[ksRow - keySize] ^ t) >>> 0;
-    }
-
-    for (invKsRow = 0; invKsRow < ksRows; invKsRow++) {
-      ksRow = ksRows - invKsRow;
-      if (invKsRow & 3) {
-        t = keySchedule[ksRow];
-      } else {
-        t = keySchedule[ksRow - 4];
-      }
-
-      if (invKsRow < 4 || ksRow <= 4) {
-        invKeySchedule[invKsRow] = t;
-      } else {
-        invKeySchedule[invKsRow] = invSubMix0[sbox[t >>> 24]] ^ invSubMix1[sbox[t >>> 16 & 0xff]] ^ invSubMix2[sbox[t >>> 8 & 0xff]] ^ invSubMix3[sbox[t & 0xff]];
-      }
-
-      invKeySchedule[invKsRow] = invKeySchedule[invKsRow] >>> 0;
-    }
-  };
-
-  // Adding this as a method greatly improves performance.
-
-
-  AESDecryptor.prototype.networkToHostOrderSwap = function networkToHostOrderSwap(word) {
-    return word << 24 | (word & 0xff00) << 8 | (word & 0xff0000) >> 8 | word >>> 24;
-  };
-
-  AESDecryptor.prototype.decrypt = function decrypt(inputArrayBuffer, offset, aesIV) {
-    var nRounds = this.keySize + 6;
-    var invKeySchedule = this.invKeySchedule;
-    var invSBOX = this.invSBox;
-
-    var invSubMix = this.invSubMix;
-    var invSubMix0 = invSubMix[0];
-    var invSubMix1 = invSubMix[1];
-    var invSubMix2 = invSubMix[2];
-    var invSubMix3 = invSubMix[3];
-
-    var initVector = this.uint8ArrayToUint32Array_(aesIV);
-    var initVector0 = initVector[0];
-    var initVector1 = initVector[1];
-    var initVector2 = initVector[2];
-    var initVector3 = initVector[3];
-
-    var inputInt32 = new Int32Array(inputArrayBuffer);
-    var outputInt32 = new Int32Array(inputInt32.length);
-
-    var t0 = void 0,
-        t1 = void 0,
-        t2 = void 0,
-        t3 = void 0;
-    var s0 = void 0,
-        s1 = void 0,
-        s2 = void 0,
-        s3 = void 0;
-    var inputWords0 = void 0,
-        inputWords1 = void 0,
-        inputWords2 = void 0,
-        inputWords3 = void 0;
-
-    var ksRow, i;
-    var swapWord = this.networkToHostOrderSwap;
-
-    while (offset < inputInt32.length) {
-      inputWords0 = swapWord(inputInt32[offset]);
-      inputWords1 = swapWord(inputInt32[offset + 1]);
-      inputWords2 = swapWord(inputInt32[offset + 2]);
-      inputWords3 = swapWord(inputInt32[offset + 3]);
-
-      s0 = inputWords0 ^ invKeySchedule[0];
-      s1 = inputWords3 ^ invKeySchedule[1];
-      s2 = inputWords2 ^ invKeySchedule[2];
-      s3 = inputWords1 ^ invKeySchedule[3];
-
-      ksRow = 4;
-
-      // Iterate through the rounds of decryption
-      for (i = 1; i < nRounds; i++) {
-        t0 = invSubMix0[s0 >>> 24] ^ invSubMix1[s1 >> 16 & 0xff] ^ invSubMix2[s2 >> 8 & 0xff] ^ invSubMix3[s3 & 0xff] ^ invKeySchedule[ksRow];
-        t1 = invSubMix0[s1 >>> 24] ^ invSubMix1[s2 >> 16 & 0xff] ^ invSubMix2[s3 >> 8 & 0xff] ^ invSubMix3[s0 & 0xff] ^ invKeySchedule[ksRow + 1];
-        t2 = invSubMix0[s2 >>> 24] ^ invSubMix1[s3 >> 16 & 0xff] ^ invSubMix2[s0 >> 8 & 0xff] ^ invSubMix3[s1 & 0xff] ^ invKeySchedule[ksRow + 2];
-        t3 = invSubMix0[s3 >>> 24] ^ invSubMix1[s0 >> 16 & 0xff] ^ invSubMix2[s1 >> 8 & 0xff] ^ invSubMix3[s2 & 0xff] ^ invKeySchedule[ksRow + 3];
-        // Update state
-        s0 = t0;
-        s1 = t1;
-        s2 = t2;
-        s3 = t3;
-
-        ksRow = ksRow + 4;
-      }
-
-      // Shift rows, sub bytes, add round key
-      t0 = invSBOX[s0 >>> 24] << 24 ^ invSBOX[s1 >> 16 & 0xff] << 16 ^ invSBOX[s2 >> 8 & 0xff] << 8 ^ invSBOX[s3 & 0xff] ^ invKeySchedule[ksRow];
-      t1 = invSBOX[s1 >>> 24] << 24 ^ invSBOX[s2 >> 16 & 0xff] << 16 ^ invSBOX[s3 >> 8 & 0xff] << 8 ^ invSBOX[s0 & 0xff] ^ invKeySchedule[ksRow + 1];
-      t2 = invSBOX[s2 >>> 24] << 24 ^ invSBOX[s3 >> 16 & 0xff] << 16 ^ invSBOX[s0 >> 8 & 0xff] << 8 ^ invSBOX[s1 & 0xff] ^ invKeySchedule[ksRow + 2];
-      t3 = invSBOX[s3 >>> 24] << 24 ^ invSBOX[s0 >> 16 & 0xff] << 16 ^ invSBOX[s1 >> 8 & 0xff] << 8 ^ invSBOX[s2 & 0xff] ^ invKeySchedule[ksRow + 3];
-      ksRow = ksRow + 3;
-
-      // Write
-      outputInt32[offset] = swapWord(t0 ^ initVector0);
-      outputInt32[offset + 1] = swapWord(t3 ^ initVector1);
-      outputInt32[offset + 2] = swapWord(t2 ^ initVector2);
-      outputInt32[offset + 3] = swapWord(t1 ^ initVector3);
-
-      // reset initVector to last 4 unsigned int
-      initVector0 = inputWords0;
-      initVector1 = inputWords1;
-      initVector2 = inputWords2;
-      initVector3 = inputWords3;
-
-      offset = offset + 4;
-    }
-
-    return outputInt32.buffer;
-  };
-
-  AESDecryptor.prototype.destroy = function destroy() {
-    this.key = undefined;
-    this.keySize = undefined;
-    this.ksRows = undefined;
-
-    this.sBox = undefined;
-    this.invSBox = undefined;
-    this.subMix = undefined;
-    this.invSubMix = undefined;
-    this.keySchedule = undefined;
-    this.invKeySchedule = undefined;
-
-    this.rcon = undefined;
-  };
-
-  return AESDecryptor;
-}();
-
-/* harmony default export */ var aes_decryptor = (AESDecryptor);
-// EXTERNAL MODULE: ./src/errors.js
-var errors = __webpack_require__(2);
-
-// EXTERNAL MODULE: ./src/utils/logger.js
-var logger = __webpack_require__(0);
-
-// CONCATENATED MODULE: ./src/crypt/decrypter.js
-function decrypter__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
-
-
-
-
-
-
-
-
-/*globals self: false */
-
-var decrypter_Decrypter = function () {
-  function Decrypter(observer, config) {
-    decrypter__classCallCheck(this, Decrypter);
-
-    this.observer = observer;
-    this.config = config;
-    this.logEnabled = true;
-    try {
-      var browserCrypto = crypto ? crypto : self.crypto;
-      this.subtle = browserCrypto.subtle || browserCrypto.webkitSubtle;
-    } catch (e) {}
-    this.disableWebCrypto = !this.subtle;
-  }
-
-  Decrypter.prototype.isSync = function isSync() {
-    return this.disableWebCrypto && this.config.enableSoftwareAES;
-  };
-
-  Decrypter.prototype.decrypt = function decrypt(data, key, iv, callback) {
-    var _this = this;
-
-    if (this.disableWebCrypto && this.config.enableSoftwareAES) {
-      if (this.logEnabled) {
-        logger["b" /* logger */].log('JS AES decrypt');
-        this.logEnabled = false;
-      }
-      var decryptor = this.decryptor;
-      if (!decryptor) {
-        this.decryptor = decryptor = new aes_decryptor();
-      }
-      decryptor.expandKey(key);
-      callback(decryptor.decrypt(data, 0, iv));
-    } else {
-      if (this.logEnabled) {
-        logger["b" /* logger */].log('WebCrypto AES decrypt');
-        this.logEnabled = false;
-      }
-      var subtle = this.subtle;
-      if (this.key !== key) {
-        this.key = key;
-        this.fastAesKey = new fast_aes_key(subtle, key);
-      }
-
-      this.fastAesKey.expandKey().then(function (aesKey) {
-        // decrypt using web crypto
-        var crypto = new aes_crypto(subtle, iv);
-        crypto.decrypt(data, aesKey).catch(function (err) {
-          _this.onWebCryptoError(err, data, key, iv, callback);
-        }).then(function (result) {
-          callback(result);
-        });
-      }).catch(function (err) {
-        _this.onWebCryptoError(err, data, key, iv, callback);
-      });
-    }
-  };
-
-  Decrypter.prototype.onWebCryptoError = function onWebCryptoError(err, data, key, iv, callback) {
-    if (this.config.enableSoftwareAES) {
-      logger["b" /* logger */].log('WebCrypto Error, disable WebCrypto API');
-      this.disableWebCrypto = true;
-      this.logEnabled = true;
-      this.decrypt(data, key, iv, callback);
-    } else {
-      logger["b" /* logger */].error('decrypting error : ' + err.message);
-      this.observer.trigger(Event.ERROR, { type: errors["b" /* ErrorTypes */].MEDIA_ERROR, details: errors["a" /* ErrorDetails */].FRAG_DECRYPT_ERROR, fatal: true, reason: err.message });
-    }
-  };
-
-  Decrypter.prototype.destroy = function destroy() {
-    var decryptor = this.decryptor;
-    if (decryptor) {
-      decryptor.destroy();
-      this.decryptor = undefined;
-    }
-  };
-
-  return Decrypter;
-}();
-
-/* harmony default export */ var decrypter = __webpack_exports__["a"] = (decrypter_Decrypter);
-
-/***/ }),
-/* 5 */
 /***/ (function(module, exports) {
 
 // Copyright Joyent, Inc. and other Node contributors.
@@ -1447,7 +1013,7 @@ function isUndefined(arg) {
 
 
 /***/ }),
-/* 6 */
+/* 5 */
 /***/ (function(module, exports, __webpack_require__) {
 
 // see https://tools.ietf.org/html/rfc1808
@@ -1616,7 +1182,7 @@ function isUndefined(arg) {
 
 
 /***/ }),
-/* 7 */
+/* 6 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
 "use strict";
@@ -1628,85 +1194,97 @@ var events = __webpack_require__(1);
 var errors = __webpack_require__(2);
 
 // EXTERNAL MODULE: ./src/crypt/decrypter.js + 3 modules
-var crypt_decrypter = __webpack_require__(4);
+var crypt_decrypter = __webpack_require__(7);
 
 // EXTERNAL MODULE: ./src/utils/logger.js
 var logger = __webpack_require__(0);
 
 // CONCATENATED MODULE: ./src/demux/adts.js
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
 /**
- *  ADTS parser helper
- */
+*  ADTS parser helper
+*/
 
 
 
-function getAudioConfig(observer, data, offset, audioCodec) {
-  var adtsObjectType,
-      // :int
-  adtsSampleingIndex,
-      // :int
-  adtsExtensionSampleingIndex,
-      // :int
-  adtsChanelConfig,
-      // :int
-  config,
-      userAgent = navigator.userAgent.toLowerCase(),
-      manifestCodec = audioCodec,
-      adtsSampleingRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
-  // byte 2
-  adtsObjectType = ((data[offset + 2] & 0xC0) >>> 6) + 1;
-  adtsSampleingIndex = (data[offset + 2] & 0x3C) >>> 2;
-  if (adtsSampleingIndex > adtsSampleingRates.length - 1) {
-    observer.trigger(Event.ERROR, { type: errors["b" /* ErrorTypes */].MEDIA_ERROR, details: errors["a" /* ErrorDetails */].FRAG_PARSING_ERROR, fatal: true, reason: 'invalid ADTS sampling index:' + adtsSampleingIndex });
-    return;
+var adts_ADTS = function () {
+  function ADTS() {
+    _classCallCheck(this, ADTS);
   }
-  adtsChanelConfig = (data[offset + 2] & 0x01) << 2;
-  // byte 3
-  adtsChanelConfig |= (data[offset + 3] & 0xC0) >>> 6;
-  logger["b" /* logger */].log('manifest codec:' + audioCodec + ',ADTS data:type:' + adtsObjectType + ',sampleingIndex:' + adtsSampleingIndex + '[' + adtsSampleingRates[adtsSampleingIndex] + 'Hz],channelConfig:' + adtsChanelConfig);
-  // firefox: freq less than 24kHz = AAC SBR (HE-AAC)
-  if (/firefox/i.test(userAgent)) {
-    if (adtsSampleingIndex >= 6) {
-      adtsObjectType = 5;
-      config = new Array(4);
-      // HE-AAC uses SBR (Spectral Band Replication) , high frequencies are constructed from low frequencies
-      // there is a factor 2 between frame sample rate and output sample rate
-      // multiply frequency by 2 (see table below, equivalent to substract 3)
-      adtsExtensionSampleingIndex = adtsSampleingIndex - 3;
-    } else {
+
+  ADTS.getAudioConfig = function getAudioConfig(observer, data, offset, audioCodec) {
+    var adtsObjectType,
+        // :int
+    adtsSampleingIndex,
+        // :int
+    adtsExtensionSampleingIndex,
+        // :int
+    adtsChanelConfig,
+        // :int
+    config,
+        userAgent,
+        adtsSampleingRates = [96000, 88200, 64000, 48000, 44100, 32000, 24000, 22050, 16000, 12000, 11025, 8000, 7350];
+    try {
+      userAgent = navigator.userAgent.toLowerCase();
+    } catch (e) {
+      userAgent = 'EDGE';
+    }
+
+    // byte 2
+    adtsObjectType = ((data[offset + 2] & 0xC0) >>> 6) + 1;
+    adtsSampleingIndex = (data[offset + 2] & 0x3C) >>> 2;
+    if (adtsSampleingIndex > adtsSampleingRates.length - 1) {
+      observer.trigger(Event.ERROR, { type: errors["b" /* ErrorTypes */].MEDIA_ERROR, details: errors["a" /* ErrorDetails */].FRAG_PARSING_ERROR, fatal: true, reason: 'invalid ADTS sampling index:' + adtsSampleingIndex });
+      return;
+    }
+    adtsChanelConfig = (data[offset + 2] & 0x01) << 2;
+    // byte 3
+    adtsChanelConfig |= (data[offset + 3] & 0xC0) >>> 6;
+    logger["b" /* logger */].log('manifest codec:' + audioCodec + ',ADTS data:type:' + adtsObjectType + ',sampleingIndex:' + adtsSampleingIndex + '[' + adtsSampleingRates[adtsSampleingIndex] + 'Hz],channelConfig:' + adtsChanelConfig);
+    // firefox: freq less than 24kHz = AAC SBR (HE-AAC)
+    if (userAgent.indexOf('firefox') !== -1) {
+      if (adtsSampleingIndex >= 6) {
+        adtsObjectType = 5;
+        config = new Array(4);
+        // HE-AAC uses SBR (Spectral Band Replication) , high frequencies are constructed from low frequencies
+        // there is a factor 2 between frame sample rate and output sample rate
+        // multiply frequency by 2 (see table below, equivalent to substract 3)
+        adtsExtensionSampleingIndex = adtsSampleingIndex - 3;
+      } else {
+        adtsObjectType = 2;
+        config = new Array(2);
+        adtsExtensionSampleingIndex = adtsSampleingIndex;
+      }
+      // Android : always use AAC
+    } else if (userAgent.indexOf('android') !== -1) {
       adtsObjectType = 2;
       config = new Array(2);
       adtsExtensionSampleingIndex = adtsSampleingIndex;
-    }
-    // Android : always use AAC
-  } else if (userAgent.indexOf('android') !== -1) {
-    adtsObjectType = 2;
-    config = new Array(2);
-    adtsExtensionSampleingIndex = adtsSampleingIndex;
-  } else {
-    /*  for other browsers (Chrome/Vivaldi/Opera ...)
-        always force audio type to be HE-AAC SBR, as some browsers do not support audio codec switch properly (like Chrome ...)
-    */
-    adtsObjectType = 5;
-    config = new Array(4);
-    // if (manifest codec is HE-AAC or HE-AACv2) OR (manifest codec not specified AND frequency less than 24kHz)
-    if (audioCodec && (audioCodec.indexOf('mp4a.40.29') !== -1 || audioCodec.indexOf('mp4a.40.5') !== -1) || !audioCodec && adtsSampleingIndex >= 6) {
-      // HE-AAC uses SBR (Spectral Band Replication) , high frequencies are constructed from low frequencies
-      // there is a factor 2 between frame sample rate and output sample rate
-      // multiply frequency by 2 (see table below, equivalent to substract 3)
-      adtsExtensionSampleingIndex = adtsSampleingIndex - 3;
     } else {
-      // if (manifest codec is AAC) AND (frequency less than 24kHz AND nb channel is 1) OR (manifest codec not specified and mono audio)
-      // Chrome fails to play back with low frequency AAC LC mono when initialized with HE-AAC.  This is not a problem with stereo.
-      if (audioCodec && audioCodec.indexOf('mp4a.40.2') !== -1 && (adtsSampleingIndex >= 6 && adtsChanelConfig === 1 || /vivaldi/i.test(userAgent)) || !audioCodec && adtsChanelConfig === 1) {
-        adtsObjectType = 2;
-        config = new Array(2);
+      /*  for other browsers (Chrome/Vivaldi/Opera ...)
+      always force audio type to be HE-AAC SBR, as some browsers do not support audio codec switch properly (like Chrome ...)
+      */
+      adtsObjectType = 5;
+      config = new Array(4);
+      // if (manifest codec is HE-AAC or HE-AACv2) OR (manifest codec not specified AND frequency less than 24kHz)
+      if (audioCodec && (audioCodec.indexOf('mp4a.40.29') !== -1 || audioCodec.indexOf('mp4a.40.5') !== -1) || !audioCodec && adtsSampleingIndex >= 6) {
+        // HE-AAC uses SBR (Spectral Band Replication) , high frequencies are constructed from low frequencies
+        // there is a factor 2 between frame sample rate and output sample rate
+        // multiply frequency by 2 (see table below, equivalent to substract 3)
+        adtsExtensionSampleingIndex = adtsSampleingIndex - 3;
+      } else {
+        // if (manifest codec is AAC) AND (frequency less than 24kHz AND nb channel is 1) OR (manifest codec not specified and mono audio)
+        // Chrome fails to play back with low frequency AAC LC mono when initialized with HE-AAC.  This is not a problem with stereo.
+        if (audioCodec && audioCodec.indexOf('mp4a.40.2') !== -1 && (adtsSampleingIndex >= 6 && adtsChanelConfig === 1 || /vivaldi/i.test(userAgent)) || !audioCodec && adtsChanelConfig === 1) {
+          adtsObjectType = 2;
+          config = new Array(2);
+        }
+        adtsExtensionSampleingIndex = adtsSampleingIndex;
       }
-      adtsExtensionSampleingIndex = adtsSampleingIndex;
     }
-  }
-  /* refer to http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Audio_Specific_Config
-      ISO 14496-3 (AAC).pdf - Table 1.13 — Syntax of AudioSpecificConfig()
+    /* refer to http://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Audio_Specific_Config
+    ISO 14496-3 (AAC).pdf - Table 1.13 — Syntax of AudioSpecificConfig()
     Audio Profile / Audio Object Type
     0: Null
     1: AAC Main
@@ -1715,7 +1293,7 @@ function getAudioConfig(observer, data, offset, audioCodec) {
     4: AAC LTP (Long Term Prediction)
     5: SBR (Spectral Band Replication)
     6: AAC Scalable
-   sampling freq
+    sampling freq
     0: 96000 Hz
     1: 88200 Hz
     2: 64000 Hz
@@ -1737,25 +1315,28 @@ function getAudioConfig(observer, data, offset, audioCodec) {
     0: Defined in AOT Specifc Config
     1: 1 channel: front-center
     2: 2 channels: front-left, front-right
-  */
-  // audioObjectType = profile => profile, the MPEG-4 Audio Object Type minus 1
-  config[0] = adtsObjectType << 3;
-  // samplingFrequencyIndex
-  config[0] |= (adtsSampleingIndex & 0x0E) >> 1;
-  config[1] |= (adtsSampleingIndex & 0x01) << 7;
-  // channelConfiguration
-  config[1] |= adtsChanelConfig << 3;
-  if (adtsObjectType === 5) {
-    // adtsExtensionSampleingIndex
-    config[1] |= (adtsExtensionSampleingIndex & 0x0E) >> 1;
-    config[2] = (adtsExtensionSampleingIndex & 0x01) << 7;
-    // adtsObjectType (force to 2, chrome is checking that object type is less than 5 ???
-    //    https://chromium.googlesource.com/chromium/src.git/+/master/media/formats/mp4/aac.cc
-    config[2] |= 2 << 2;
-    config[3] = 0;
-  }
-  return { config: config, samplerate: adtsSampleingRates[adtsSampleingIndex], channelCount: adtsChanelConfig, codec: 'mp4a.40.' + adtsObjectType, manifestCodec: manifestCodec };
-}
+    */
+    // audioObjectType = profile => profile, the MPEG-4 Audio Object Type minus 1
+    config[0] = adtsObjectType << 3;
+    // samplingFrequencyIndex
+    config[0] |= (adtsSampleingIndex & 0x0E) >> 1;
+    config[1] |= (adtsSampleingIndex & 0x01) << 7;
+    // channelConfiguration
+    config[1] |= adtsChanelConfig << 3;
+    if (adtsObjectType === 5) {
+      // adtsExtensionSampleingIndex
+      config[1] |= (adtsExtensionSampleingIndex & 0x0E) >> 1;
+      config[2] = (adtsExtensionSampleingIndex & 0x01) << 7;
+      // adtsObjectType (force to 2, chrome is checking that object type is less than 5 ???
+      //    https://chromium.googlesource.com/chromium/src.git/+/master/media/formats/mp4/aac.cc
+      config[2] |= 2 << 2;
+      config[3] = 0;
+    }
+    return { config: config, samplerate: adtsSampleingRates[adtsSampleingIndex], channelCount: adtsChanelConfig, codec: 'mp4a.40.' + adtsObjectType, manifestCodec: manifestCodec };
+  };
+
+  return ADTS;
+}();
 
 function isHeaderPattern(data, offset) {
   return data[offset] === 0xff && (data[offset + 1] & 0xf6) === 0xf0;
@@ -1860,7 +1441,7 @@ function appendFrame(track, data, offset, pts, frameIndex) {
 var id3 = __webpack_require__(3);
 
 // CONCATENATED MODULE: ./src/demux/aacdemuxer.js
-function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+function aacdemuxer__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 /**
  * AAC demuxer
@@ -1871,7 +1452,7 @@ function _classCallCheck(instance, Constructor) { if (!(instance instanceof Cons
 
 var aacdemuxer_AACDemuxer = function () {
   function AACDemuxer(observer, remuxer, config) {
-    _classCallCheck(this, AACDemuxer);
+    aacdemuxer__classCallCheck(this, AACDemuxer);
 
     this.observer = observer;
     this.config = config;
@@ -2738,137 +2319,216 @@ var exp_golomb_ExpGolomb = function () {
 }();
 
 /* harmony default export */ var exp_golomb = (exp_golomb_ExpGolomb);
-// CONCATENATED MODULE: ./src/demux/sample-aes.js
-function sample_aes__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+// CONCATENATED MODULE: ./src/demux/hevc-sps-parser.js
+function hevc_sps_parser__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
 /**
- * SAMPLE-AES decrypter
+ * Parser for HEVC SPS NAL
 */
 
+var HEVCSpsParser = function () {
+  function HEVCSpsParser(data) {
+    hevc_sps_parser__classCallCheck(this, HEVCSpsParser);
 
-
-var sample_aes_SampleAesDecrypter = function () {
-  function SampleAesDecrypter(observer, config, decryptdata, discardEPB) {
-    sample_aes__classCallCheck(this, SampleAesDecrypter);
-
-    this.decryptdata = decryptdata;
-    this.discardEPB = discardEPB;
-    this.decrypter = new crypt_decrypter["a" /* default */](observer, config);
+    this.data = data;
+    // the number of bytes left to examine in this.data
+    this.bytesAvailable = this.data.byteLength;
+    // the number of bits left to examine in the current word
+    this.bitsAvailable = 0; // :uint
+    this.firstByte = 0xff;
+    this.cache = 0xff;
+    this.bitsInCache = 0;
   }
 
-  SampleAesDecrypter.prototype.decryptBuffer = function decryptBuffer(encryptedData, callback) {
-    this.decrypter.decrypt(encryptedData, this.decryptdata.key.buffer, this.decryptdata.iv.buffer, callback);
+  HEVCSpsParser.prototype.getByte = function getByte() {
+    var position = this.data.byteLength - this.bytesAvailable,
+        availableBytes = Math.min(1, this.bytesAvailable);
+
+    var byte = new Uint8Array(1);
+    byte.set(this.data.subarray(position, position + availableBytes));
+    this.bitsAvailable = availableBytes * 8;
+    this.bytesAvailable -= availableBytes;
+
+    var byteAsUint8 = new DataView(byte.buffer).getUint8(0);
+    return byteAsUint8;
   };
 
-  // AAC - encrypt all full 16 bytes blocks starting from offset 16
+  // (size:int):uint
 
 
-  SampleAesDecrypter.prototype.decryptAacSample = function decryptAacSample(samples, sampleIndex, callback, sync) {
-    var curUnit = samples[sampleIndex].unit;
-    var encryptedData = curUnit.subarray(16, curUnit.length - curUnit.length % 16);
-    var encryptedBuffer = encryptedData.buffer.slice(encryptedData.byteOffset, encryptedData.byteOffset + encryptedData.length);
+  HEVCSpsParser.prototype.read = function read(nbits) {
+    while (this.bitsInCache < nbits) {
+      var checkThreeByte = true;
+      var byte = this.getByte();
 
-    var localthis = this;
-    this.decryptBuffer(encryptedBuffer, function (decryptedData) {
-      decryptedData = new Uint8Array(decryptedData);
-      curUnit.set(decryptedData, 16);
-
-      if (!sync) {
-        localthis.decryptAacSamples(samples, sampleIndex + 1, callback);
+      if (checkThreeByte && byte === 0x03 && this.firstByte === 0x00 && (this.cache & 0xff) === 0) {
+        byte = this.getByte();
+        checkThreeByte = false;
       }
-    });
+      this.cache = this.cache << 8 | this.firstByte;
+      this.firstByte = byte;
+      this.bitsInCache += 8;
+    }
   };
 
-  SampleAesDecrypter.prototype.decryptAacSamples = function decryptAacSamples(samples, sampleIndex, callback) {
-    for (;; sampleIndex++) {
-      if (sampleIndex >= samples.length) {
-        callback();
-        return;
+  // (size:int):void
+
+
+  HEVCSpsParser.prototype.skipBits = function skipBits(nbits) {
+    this.read(nbits);
+    this.bitsInCache = this.bitsInCache - nbits;
+  };
+
+  // (size:int):uint
+
+
+  HEVCSpsParser.prototype.readBits = function readBits(nbits) {
+    this.read(nbits);
+    var shift = this.bitsInCache - nbits;
+    var val = this.firstByte >> shift;
+    val |= this.cache << 8 - shift;
+
+    val &= (1 << nbits) - 1;
+    this.bitsInCache = shift;
+    return val;
+  };
+
+  // ():uint
+
+
+  HEVCSpsParser.prototype.readUE = function readUE() {
+    var val = 0x00;
+    var i = 0;
+    var bit;
+    bit = this.readBits(1);
+    while (bit === 0) {
+      i++;
+      bit = this.readBits(1);
+    }
+
+    val = this.readBits(i);
+    return (1 << i) - 1 + val;
+  };
+
+  // ():void
+
+
+  HEVCSpsParser.prototype.readProfileTierLevel = function readProfileTierLevel(maxSubLayersMinus1) {
+
+    this.skipBits(2); // profile_space
+    this.skipBits(1); // tierFlag
+    this.skipBits(5); // profileIdc
+
+    this.skipBits(16); // some 32bits
+    this.skipBits(16);
+
+    this.skipBits(1); // progressiveSourceFlag
+    this.skipBits(1); // interlacedSourceFlag
+    this.skipBits(1); // nonPackedConstraintFlag
+    this.skipBits(1); // frameOnlyConstraintFlag
+
+
+    this.skipBits(16); // reserved zero bits
+    this.skipBits(16);
+    this.skipBits(12);
+
+    this.skipBits(8); // level_idc
+
+    var subLayerProfilePresentFlag = [];
+    var subLayerLevelPresentFlag = [];
+    for (var j = 0; j < maxSubLayersMinus1; j++) {
+      subLayerProfilePresentFlag[j] = this.readBits(1);
+      subLayerLevelPresentFlag[j] = this.readBits(1);
+    }
+
+    if (maxSubLayersMinus1 !== 0) {
+      this.skipBits((8 - maxSubLayersMinus1) * 2);
+    }
+
+    for (var i = 0; i < maxSubLayersMinus1; i++) {
+      if (subLayerProfilePresentFlag[i] !== 0) {
+        this.skipBits(2);
+        this.skipBits(1);
+        this.skipBits(5);
+
+        this.skipBits(16);
+        this.skipBits(16);
+
+        this.skipBits(4);
+
+        this.skipBits(16);
+        this.skipBits(16);
+        this.skipBits(12);
       }
-
-      if (samples[sampleIndex].unit.length < 32) {
-        continue;
-      }
-
-      var sync = this.decrypter.isSync();
-
-      this.decryptAacSample(samples, sampleIndex, callback, sync);
-
-      if (!sync) {
-        return;
+      if (subLayerLevelPresentFlag[i] !== 0) {
+        this.skipBits(8);
       }
     }
   };
 
-  // AVC - encrypt one 16 bytes block out of ten, starting from offset 32
+  /**
+   * Read a sequence parameter set and return some interesting video
+   * properties. A sequence parameter set is the HEVC metadata that
+   * describes the properties of upcoming video frames.
+   * @param data {Uint8Array} the bytes of a sequence parameter set
+   * @return {object} an object with configuration parsed from the
+   * sequence parameter set, including the dimensions of the
+   * associated video frames.
+   */
 
 
-  SampleAesDecrypter.prototype.getAvcEncryptedData = function getAvcEncryptedData(decodedData) {
-    var encryptedDataLen = Math.floor((decodedData.length - 48) / 160) * 16 + 16;
-    var encryptedData = new Int8Array(encryptedDataLen);
-    var outputPos = 0;
-    for (var inputPos = 32; inputPos <= decodedData.length - 16; inputPos += 160, outputPos += 16) {
-      encryptedData.set(decodedData.subarray(inputPos, inputPos + 16), outputPos);
+  HEVCSpsParser.prototype.readSPSHEVC = function readSPSHEVC() {
+    var vpsId = 0,
+        maxSubLayersMinus1 = 0,
+        tINf = 0,
+        spsId = 0,
+        chromaFormatIdc = 0,
+        width = 0,
+        height = 0,
+        conformanceWindowFlag = 0,
+        bitDepthLumaMinus8 = 0,
+        bitDepthChromaMinus8 = 0;
+
+    this.readBits(8); // NAL header
+    this.readBits(8); // NAL header
+
+    vpsId = this.readBits(4); // vps_id
+    maxSubLayersMinus1 = this.readBits(3); // max_sub_layers_minus1
+    tINf = this.readBits(1); // temporal_id_nesting_flag
+
+    this.readProfileTierLevel(maxSubLayersMinus1);
+
+    spsId = this.readUE(); // sps id
+    chromaFormatIdc = this.readUE();
+    if (chromaFormatIdc === 3) {
+      this.skipBits(1); // separate_colour_plane_flag
     }
-    return encryptedData;
-  };
 
-  SampleAesDecrypter.prototype.getAvcDecryptedUnit = function getAvcDecryptedUnit(decodedData, decryptedData) {
-    decryptedData = new Uint8Array(decryptedData);
-    var inputPos = 0;
-    for (var outputPos = 32; outputPos <= decodedData.length - 16; outputPos += 160, inputPos += 16) {
-      decodedData.set(decryptedData.subarray(inputPos, inputPos + 16), outputPos);
+    width = this.readUE(); // pic_width_in_luma_samples
+    height = this.readUE(); // pic_height_in_luma_samples
+
+
+    conformanceWindowFlag = this.readBits(1);
+    if (conformanceWindowFlag === 1) {
+      this.skipUE(); // conf_win_left_offset
+      this.skipUE(); // conf_win_right_offset
+      this.skipUE(); // conf_win_top_offset
+      this.skipUE(); // conf_win_bottom_offset
     }
-    return decodedData;
+
+    bitDepthLumaMinus8 = this.readUE(); // bit_depth_luma_minus8
+    bitDepthChromaMinus8 = this.readUE(); // bit_depth_chroma_minus8
+
+    return { width: width, height: height,
+      chromaFormatIdc: chromaFormatIdc,
+      bitDepthLumaMinus8: bitDepthLumaMinus8,
+      bitDepthChromaMinus8: bitDepthChromaMinus8 };
   };
 
-  SampleAesDecrypter.prototype.decryptAvcSample = function decryptAvcSample(samples, sampleIndex, unitIndex, callback, curUnit, sync) {
-    var decodedData = this.discardEPB(curUnit.data);
-    var encryptedData = this.getAvcEncryptedData(decodedData);
-    var localthis = this;
-
-    this.decryptBuffer(encryptedData.buffer, function (decryptedData) {
-      curUnit.data = localthis.getAvcDecryptedUnit(decodedData, decryptedData);
-
-      if (!sync) {
-        localthis.decryptAvcSamples(samples, sampleIndex, unitIndex + 1, callback);
-      }
-    });
-  };
-
-  SampleAesDecrypter.prototype.decryptAvcSamples = function decryptAvcSamples(samples, sampleIndex, unitIndex, callback) {
-    for (;; sampleIndex++, unitIndex = 0) {
-      if (sampleIndex >= samples.length) {
-        callback();
-        return;
-      }
-
-      var curUnits = samples[sampleIndex].units;
-      for (;; unitIndex++) {
-        if (unitIndex >= curUnits.length) {
-          break;
-        }
-
-        var curUnit = curUnits[unitIndex];
-        if (curUnit.length <= 48 || curUnit.type !== 1 && curUnit.type !== 5) {
-          continue;
-        }
-
-        var sync = this.decrypter.isSync();
-
-        this.decryptAvcSample(samples, sampleIndex, unitIndex, callback, curUnit, sync);
-
-        if (!sync) {
-          return;
-        }
-      }
-    }
-  };
-
-  return SampleAesDecrypter;
+  return HEVCSpsParser;
 }();
 
-/* harmony default export */ var sample_aes = (sample_aes_SampleAesDecrypter);
+/* harmony default export */ var hevc_sps_parser = (HEVCSpsParser);
 // CONCATENATED MODULE: ./src/demux/tsdemuxer.js
 function tsdemuxer__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
 
@@ -2913,14 +2573,15 @@ var tsdemuxer_TSDemuxer = function () {
 
     this.observer = observer;
     this.config = config;
-    this.typeSupported = typeSupported;
-    this.remuxer = remuxer;
-    this.sampleAes = null;
+    this.lastCC = 0;
+    this.remuxer = new this.remuxerClass(observer, id, config);
+    this.HEVC = 0x24;
+    this.AVC = 0x1b;
   }
 
   TSDemuxer.prototype.setDecryptData = function setDecryptData(decryptdata) {
     if (decryptdata != null && decryptdata.key != null && decryptdata.method === 'SAMPLE-AES') {
-      this.sampleAes = new sample_aes(this.observer, this.config, decryptdata, this.discardEPB);
+      this.sampleAes = new SampleAesDecrypter(this.observer, this.config, decryptdata, this.discardEPB);
     } else {
       this.sampleAes = null;
     }
@@ -2993,12 +2654,11 @@ var tsdemuxer_TSDemuxer = function () {
   TSDemuxer.prototype.resetInitSegment = function resetInitSegment(initSegment, audioCodec, videoCodec, duration) {
     this.pmtParsed = false;
     this._pmtId = -1;
-
-    this._avcTrack = TSDemuxer.createTrack('video', duration);
-    this._audioTrack = TSDemuxer.createTrack('audio', duration);
-    this._id3Track = TSDemuxer.createTrack('id3', duration);
-    this._txtTrack = TSDemuxer.createTrack('text', duration);
-
+    // codec HEVC = 0x24, AVC = 0x1b
+    this._videoTrack = { container: 'video/mp2t', type: 'video', streamType: -1, PID: -1, sequenceNumber: 0, samples: [], len: 0, nbNalu: 0, dropped: 0 };
+    this._aacTrack = { container: 'video/mp2t', type: 'audio', id: -1, sequenceNumber: 0, samples: [], len: 0 };
+    this._id3Track = { type: 'id3', id: -1, sequenceNumber: 0, samples: [], len: 0 };
+    this._txtTrack = { type: 'text', id: -1, sequenceNumber: 0, samples: [], len: 0 };
     // flush any partial content
     this.aacOverFlow = null;
     this.aacLastPTS = null;
@@ -3019,30 +2679,30 @@ var tsdemuxer_TSDemuxer = function () {
   // feed incoming data to the front of the parsing pipeline
 
 
-  TSDemuxer.prototype.append = function append(data, timeOffset, contiguous, accurateTimeOffset) {
-    var start,
+  TSDemuxer.prototype.push = function push(data, audioCodec, videoCodec, timeOffset, cc, level, sn, duration) {
+    var videoData,
+        aacData,
+        id3Data,
+        start,
         len = data.length,
         stt,
         pid,
         atf,
         offset,
-        pes,
+        codecsOnly = this.remuxer.passthrough,
         unknownPIDs = false;
     this.contiguous = contiguous;
     var pmtParsed = this.pmtParsed,
-        avcTrack = this._avcTrack,
-        audioTrack = this._audioTrack,
-        id3Track = this._id3Track,
-        avcId = avcTrack.pid,
-        audioId = audioTrack.pid,
-        id3Id = id3Track.pid,
-        pmtId = this._pmtId,
-        avcData = avcTrack.pesData,
-        audioData = audioTrack.pesData,
-        id3Data = id3Track.pesData,
-        parsePAT = this._parsePAT,
+        videoPID = this._videoTrack.PID,
+        videoStreamType = this._videoTrack.streamType,
+        aacId = this._aacTrack.id,
+        id3Id = this._id3Track.id,
+        pmtId = this._pmtId;
+
+    var parsePAT = this._parsePAT,
         parsePMT = this._parsePMT,
         parsePES = this._parsePES,
+        parseHEVCPES = this._parseHEVCPES.bind(this),
         parseAVCPES = this._parseAVCPES.bind(this),
         parseAACPES = this._parseAACPES.bind(this),
         parseMPEGPES = this._parseMPEGPES.bind(this),
@@ -3071,25 +2731,48 @@ var tsdemuxer_TSDemuxer = function () {
           offset = start + 4;
         }
         switch (pid) {
-          case avcId:
+          case videoPID:
             if (stt) {
-              if (avcData && (pes = parsePES(avcData))) {
-                parseAVCPES(pes, false);
+              if (videoData) {
+                var pesData = parsePES(videoData);
+                if (videoStreamType === this.HEVC) {
+                  parseHEVCPES(pesData);
+                } else if (videoStreamType === this.AVC) {
+                  parseAVCPES(pesData);
+                } else {
+                  logger["b" /* logger */].error('unsupported video stream type');
+                  return;
+                }
+
+                if (codecsOnly) {
+                  // if we have video codec info AND
+                  // if audio PID is undefined OR if we have audio codec info,
+                  // we have all codec info !
+                  if (this._videoTrack.codec && (aacId === -1 || this._aacTrack.codec)) {
+                    this.remux(level, sn, data);
+                    return;
+                  }
+                }
               }
-              avcData = { data: [], size: 0 };
+              videoData = { data: [], size: 0 };
             }
-            if (avcData) {
-              avcData.data.push(data.subarray(offset, start + 188));
-              avcData.size += start + 188 - offset;
+            if (videoData) {
+              videoData.data.push(data.subarray(offset, start + 188));
+              videoData.size += start + 188 - offset;
             }
             break;
           case audioId:
             if (stt) {
-              if (audioData && (pes = parsePES(audioData))) {
-                if (audioTrack.isAAC) {
-                  parseAACPES(pes);
-                } else {
-                  parseMPEGPES(pes);
+              if (aacData) {
+                parseAACPES(parsePES(aacData));
+                if (codecsOnly) {
+                  // here we now that we have audio codec info
+                  // if video PID is undefined OR if we have video codec info,
+                  // we have all codec infos !
+                  if (this._aacTrack.codec && (videoPID === -1 || this._videoTrack.codec)) {
+                    this.remux(level, sn, data);
+                    return;
+                  }
                 }
               }
               audioData = { data: [], size: 0 };
@@ -3121,27 +2804,11 @@ var tsdemuxer_TSDemuxer = function () {
             if (stt) {
               offset += data[offset] + 1;
             }
-            var parsedPIDs = parsePMT(data, offset, this.typeSupported.mpeg === true || this.typeSupported.mp3 === true, this.sampleAes != null);
-
-            // only update track id if track PID found while parsing PMT
-            // this is to avoid resetting the PID to -1 in case
-            // track PID transiently disappears from the stream
-            // this could happen in case of transient missing audio samples for example
-            // NOTE this is only the PID of the track as found in TS,
-            // but we are not using this for MP4 track IDs.
-            avcId = parsedPIDs.avc;
-            if (avcId > 0) {
-              avcTrack.pid = avcId;
-            }
-            audioId = parsedPIDs.audio;
-            if (audioId > 0) {
-              audioTrack.pid = audioId;
-              audioTrack.isAAC = parsedPIDs.isAAC;
-            }
-            id3Id = parsedPIDs.id3;
-            if (id3Id > 0) {
-              id3Track.pid = id3Id;
-            }
+            var parsedPIDs = parsePMT(data, offset);
+            videoPID = this._videoTrack.PID = parsedPIDs.videoPID;
+            videoStreamType = this._videoTrack.streamType = parsedPIDs.videoStreamType;
+            aacId = this._aacTrack.id = parsedPIDs.aac;
+            id3Id = this._id3Track.id = parsedPIDs.id3;
             if (unknownPIDs && !pmtParsed) {
               logger["b" /* logger */].log('reparse from beginning');
               unknownPIDs = false;
@@ -3161,28 +2828,16 @@ var tsdemuxer_TSDemuxer = function () {
         this.observer.trigger(events["a" /* default */].ERROR, { type: errors["b" /* ErrorTypes */].MEDIA_ERROR, details: errors["a" /* ErrorDetails */].FRAG_PARSING_ERROR, fatal: false, reason: 'TS packet did not start with 0x47' });
       }
     }
-    // try to parse last PES packets
-    if (avcData && (pes = parsePES(avcData))) {
-      parseAVCPES(pes, true);
-      avcTrack.pesData = null;
-    } else {
-      // either avcData null or PES truncated, keep it for next frag parsing
-      avcTrack.pesData = avcData;
-    }
-
-    if (audioData && (pes = parsePES(audioData))) {
-      if (audioTrack.isAAC) {
-        parseAACPES(pes);
+    // parse last PES packet
+    if (videoData) {
+      var pes = parsePES(videoData);
+      if (videoStreamType === this.HEVC) {
+        parseHEVCPES(pes);
+      } else if (videoStreamType === this.AVC) {
+        parseAVCPES(pes);
       } else {
-        parseMPEGPES(pes);
+        logger["b" /* logger */].error('unsupported video stream type ' + videoStreamType);
       }
-      audioTrack.pesData = null;
-    } else {
-      if (audioData && audioData.size) {
-        logger["b" /* logger */].log('last AAC PES packet truncated,might overlap between fragments');
-      }
-      // either audioData null or PES truncated, keep it for next frag parsing
-      audioTrack.pesData = audioData;
     }
 
     if (id3Data && (pes = parsePES(id3Data))) {
@@ -3200,26 +2855,8 @@ var tsdemuxer_TSDemuxer = function () {
     }
   };
 
-  TSDemuxer.prototype.decryptAndRemux = function decryptAndRemux(audioTrack, videoTrack, id3Track, textTrack, timeOffset, contiguous, accurateTimeOffset) {
-    if (audioTrack.samples && audioTrack.isAAC) {
-      var localthis = this;
-      this.sampleAes.decryptAacSamples(audioTrack.samples, 0, function () {
-        localthis.decryptAndRemuxAvc(audioTrack, videoTrack, id3Track, textTrack, timeOffset, contiguous, accurateTimeOffset);
-      });
-    } else {
-      this.decryptAndRemuxAvc(audioTrack, videoTrack, id3Track, textTrack, timeOffset, contiguous, accurateTimeOffset);
-    }
-  };
-
-  TSDemuxer.prototype.decryptAndRemuxAvc = function decryptAndRemuxAvc(audioTrack, videoTrack, id3Track, textTrack, timeOffset, contiguous, accurateTimeOffset) {
-    if (videoTrack.samples) {
-      var localthis = this;
-      this.sampleAes.decryptAvcSamples(videoTrack.samples, 0, 0, function () {
-        localthis.remuxer.remux(audioTrack, videoTrack, id3Track, textTrack, timeOffset, contiguous, accurateTimeOffset);
-      });
-    } else {
-      this.remuxer.remux(audioTrack, videoTrack, id3Track, textTrack, timeOffset, contiguous, accurateTimeOffset);
-    }
+  TSDemuxer.prototype.remux = function remux(level, sn, data) {
+    this.remuxer.remux(level, sn, this._aacTrack, this._videoTrack, this._id3Track, this._txtTrack, this.timeOffset, this.contiguous, data);
   };
 
   TSDemuxer.prototype.destroy = function destroy() {
@@ -3233,12 +2870,12 @@ var tsdemuxer_TSDemuxer = function () {
     //logger.log('PMT PID:'  + this._pmtId);
   };
 
-  TSDemuxer.prototype._parsePMT = function _parsePMT(data, offset, mpegSupported, isSampleAes) {
+  TSDemuxer.prototype._parsePMT = function _parsePMT(data, offset) {
     var sectionLength,
         tableEnd,
         programInfoLength,
         pid,
-        result = { audio: -1, avc: -1, id3: -1, isAAC: true };
+        result = { aac: -1, videoPID: -1, videoStreamType: -1, id3: -1 };
     sectionLength = (data[offset + 1] & 0x0f) << 8 | data[offset + 2];
     tableEnd = offset + 3 + sectionLength - 4;
     // to determine where the table is, we have to figure out how
@@ -3248,15 +2885,8 @@ var tsdemuxer_TSDemuxer = function () {
     offset += 12 + programInfoLength;
     while (offset < tableEnd) {
       pid = (data[offset + 1] & 0x1F) << 8 | data[offset + 2];
-      switch (data[offset]) {
-        case 0xcf:
-          // SAMPLE-AES AAC
-          if (!isSampleAes) {
-            logger["b" /* logger */].log('unkown stream type:' + data[offset]);
-            break;
-          }
-        /* falls through */
-
+      var streamType = data[offset];
+      switch (streamType) {
         // ISO/IEC 13818-7 ADTS AAC (MPEG-2 lower bit-rate audio)
         case 0x0f:
           //logger.log('AAC PID:'  + pid);
@@ -3272,42 +2902,23 @@ var tsdemuxer_TSDemuxer = function () {
             result.id3 = pid;
           }
           break;
-
-        case 0xdb:
-          // SAMPLE-AES AVC
-          if (!isSampleAes) {
-            logger["b" /* logger */].log('unkown stream type:' + data[offset]);
-            break;
+        // HEVC
+        case 0x24:
+          if (result.videoPID === -1) {
+            result.videoPID = pid;
+            result.videoStreamType = streamType;
           }
-        /* falls through */
-
+          break;
         // ITU-T Rec. H.264 and ISO/IEC 14496-10 (lower bit-rate video)
         case 0x1b:
-          //logger.log('AVC PID:'  + pid);
-          if (result.avc === -1) {
-            result.avc = pid;
+          if (result.videoPID === -1) {
+            result.videoPID = pid;
+            result.videoStreamType = streamType;
           }
-          break;
-
-        // ISO/IEC 11172-3 (MPEG-1 audio)
-        // or ISO/IEC 13818-3 (MPEG-2 halved sample rate audio)
-        case 0x03:
-        case 0x04:
-          //logger.log('MPEG PID:'  + pid);
-          if (!mpegSupported) {
-            logger["b" /* logger */].log('MPEG audio found, not supported in this browser for now');
-          } else if (result.audio === -1) {
-            result.audio = pid;
-            result.isAAC = false;
-          }
-          break;
-
-        case 0x24:
-          logger["b" /* logger */].warn('HEVC stream type found, not supported for now');
           break;
 
         default:
-          logger["b" /* logger */].log('unkown stream type:' + data[offset]);
+          logger["b" /* logger */].log('unkown stream type:' + streamType);
           break;
       }
       // move to the next table entry
@@ -3423,32 +3034,256 @@ var tsdemuxer_TSDemuxer = function () {
     }
   };
 
-  TSDemuxer.prototype.pushAccesUnit = function pushAccesUnit(avcSample, avcTrack) {
-    if (avcSample.units.length && avcSample.frame) {
-      var samples = avcTrack.samples;
-      var nbSamples = samples.length;
-      // only push AVC sample if starting with a keyframe is not mandatory OR
-      //    if keyframe already found in this fragment OR
-      //       keyframe found in last fragment (track.sps) AND
-      //          samples already appended (we already found a keyframe in this fragment) OR fragment is contiguous
-      if (!this.config.forceKeyFrameOnDiscontinuity || avcSample.key === true || avcTrack.sps && (nbSamples || this.contiguous)) {
-        avcSample.id = nbSamples;
-        samples.push(avcSample);
-      } else {
-        // dropped samples, track it
-        avcTrack.dropped++;
-      }
-    }
-    if (avcSample.debug.length) {
-      logger["b" /* logger */].log(avcSample.pts + '/' + avcSample.dts + ':' + avcSample.debug);
-    }
-  };
-
-  TSDemuxer.prototype._parseAVCPES = function _parseAVCPES(pes, last) {
+  TSDemuxer.prototype._parseHEVCPES = function _parseHEVCPES(pes) {
     var _this = this;
 
-    //logger.log('parse new PES');
-    var track = this._avcTrack,
+    var track = this._videoTrack,
+        samples = track.samples,
+        units = this._parseHEVCNALu(pes.data),
+        units2 = [],
+        debug = false,
+        key = false,
+        length = 0,
+
+    // expGolombDecoder,
+    avcSample,
+        push;
+    // i;
+    // no NALu found
+    if (units.length === 0 && samples.length > 0) {
+      // append pes.data to previous NAL unit
+      var lastavcSample = samples[samples.length - 1];
+      var lastUnit = lastavcSample.units.units[lastavcSample.units.units.length - 1];
+      var tmp = new Uint8Array(lastUnit.data.byteLength + pes.data.byteLength);
+      tmp.set(lastUnit.data, 0);
+      tmp.set(pes.data, lastUnit.data.byteLength);
+      lastUnit.data = tmp;
+      lastavcSample.units.length += pes.data.byteLength;
+      track.len += pes.data.byteLength;
+    }
+    //free pes.data to save up some memory
+    pes.data = null;
+    var debugString = '';
+
+    var pushAccesUnit = function () {
+      if (units2.length) {
+        // only push AVC sample if starting with a keyframe is not mandatory OR
+        //    if keyframe already found in this fragment OR
+        //       keyframe found in last fragment (track.sps) AND
+        //          samples already appended (we already found a keyframe in this fragment) OR fragment is contiguous
+        if (!this.config.forceKeyFrameOnDiscontinuity || key === true || track.sps /*&& (samples.length || this.contiguous)*/) {
+          avcSample = { units: { units: units2, length: length }, pts: pes.pts, dts: pes.dts, key: key };
+          samples.push(avcSample);
+          track.len += length;
+          track.nbNalu += units2.length;
+        } else {
+          // dropped samples, track it
+          track.dropped++;
+        }
+        units2 = [];
+        length = 0;
+      }
+    }.bind(this);
+
+    units.forEach(function (unit) {
+      switch (unit.type) {
+        case 0:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_TRAIL_N ';
+          }
+          break;
+        case 1:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_TRAIL_R ';
+          }
+          key = true;
+          break;
+        case 2:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_TSA_N ';
+          }
+          break;
+        case 3:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_TSA_R ';
+          }
+          key = true;
+          break;
+        case 4:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_STSA_N ';
+          }
+          break;
+        case 5:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_STSA_R ';
+          }
+          key = true;
+          break;
+        case 6:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_RADL_N ';
+          }
+          break;
+        case 7:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_RADL_R ';
+          }
+          key = true;
+          break;
+        case 8:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_RASL_N ';
+          }
+          break;
+        case 9:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_RASL_R ';
+          }
+          key = true;
+          break;
+        case 16:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_BLA_W_LP ';
+          }
+          break;
+        case 17:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_BLA_W_RADL ';
+          }
+          break;
+        case 18:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_BLA_N_LP ';
+          }
+          break;
+        case 19:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_IDR_W_RADL ';
+          }
+          key = true;
+          break;
+        case 20:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_IDR_N_LP ';
+          }
+          key = true;
+          break;
+        case 21:
+          push = true;
+          if (debug) {
+            debugString += 'SLICE_CRA_NUT ';
+          }
+          key = true;
+          break;
+        case 32:
+          push = true;
+          track.vps = [unit.data];
+          if (debug) {
+            debugString += 'VPS ';
+          }
+          break;
+        //SPS
+        case 33:
+          push = true;
+          if (debug) {
+            debugString += 'SPS ';
+          }
+          track.sps = [unit.data];
+
+          var hevcSPSParser = new hevc_sps_parser(unit.data);
+          var config = hevcSPSParser.readSPSHEVC();
+          track.width = config.width;
+          track.height = config.height;
+          track.duration = _this._duration;
+          track.codec = 'hev1.1.6.L93.B0';
+          track.chromaFormatIdc = config.chromaFormatIdc;
+          track.bitDepthLumaMinus8 = config.bitDepthLumaMinus8;
+          track.bitDepthChromaMinus8 = config.bitDepthChromaMinus8;
+          break;
+        //PPS
+        case 34:
+          push = true;
+          if (debug) {
+            debugString += 'PPS ';
+          }
+          // if (!track.pps) {
+          track.pps = [unit.data];
+          // }
+          break;
+        case 35:
+          push = false;
+          if (debug) {
+            debugString += 'AUD ';
+          }
+          pushAccesUnit();
+          break;
+        case 36:
+          push = true;
+          if (debug) {
+            debugString += 'EOS ';
+          }
+          break;
+        case 37:
+          push = true;
+          if (debug) {
+            debugString += 'EOB ';
+          }
+          break;
+        case 38:
+          push = true;
+          if (debug) {
+            debugString += 'FD ';
+          }
+          break;
+        case 39:
+          push = true;
+          if (debug) {
+            debugString += 'PREFIX_SEI ';
+          }
+          break;
+        case 40:
+          push = true;
+          if (debug) {
+            debugString += 'SUFFIX_SEI ';
+          }
+          break;
+        default:
+          push = false;
+          debugString += 'unknown NAL ' + unit.type + ' ';
+          break;
+      }
+      if (push) {
+        units2.push(unit);
+        length += unit.data.byteLength;
+      }
+    });
+    if (debug || debugString.length) {
+      logger["b" /* logger */].log(debugString);
+    }
+    pushAccesUnit();
+  };
+
+  TSDemuxer.prototype._parseAVCPES = function _parseAVCPES(pes) {
+    var _this2 = this;
+
+    var track = this._videoTrack,
+        samples = track.samples,
         units = this._parseAVCNALu(pes.data),
         debug = false,
         expGolombDecoder,
@@ -3476,7 +3311,7 @@ var tsdemuxer_TSDemuxer = function () {
         case 1:
           push = true;
           if (!avcSample) {
-            avcSample = _this.avcSample = createAVCSample(true, pes.pts, pes.dts, '');
+            avcSample = _this2.avcSample = createAVCSample(true, pes.pts, pes.dts, '');
           }
           if (debug) {
             avcSample.debug += 'NDR ';
@@ -3502,7 +3337,7 @@ var tsdemuxer_TSDemuxer = function () {
           push = true;
           // handle PES not starting with AUD
           if (!avcSample) {
-            avcSample = _this.avcSample = createAVCSample(true, pes.pts, pes.dts, '');
+            avcSample = _this2.avcSample = createAVCSample(true, pes.pts, pes.dts, '');
           }
           if (debug) {
             avcSample.debug += 'IDR ';
@@ -3516,7 +3351,7 @@ var tsdemuxer_TSDemuxer = function () {
           if (debug && avcSample) {
             avcSample.debug += 'SEI ';
           }
-          expGolombDecoder = new exp_golomb(_this.discardEPB(unit.data));
+          expGolombDecoder = new exp_golomb(_this2.discardEPB(unit.data));
 
           // skip frameType
           expGolombDecoder.readUByte();
@@ -3572,7 +3407,7 @@ var tsdemuxer_TSDemuxer = function () {
                         byteArray.push(expGolombDecoder.readUByte());
                       }
 
-                      _this._insertSampleInOrder(_this._txtTrack.samples, { type: 3, pts: pes.pts, bytes: byteArray });
+                      _this2._insertSampleInOrder(_this2._txtTrack.samples, { type: 3, pts: pes.pts, bytes: byteArray });
                     }
                   }
                 }
@@ -3598,7 +3433,7 @@ var tsdemuxer_TSDemuxer = function () {
             track.height = config.height;
             track.pixelRatio = config.pixelRatio;
             track.sps = [unit.data];
-            track.duration = _this._duration;
+            track.duration = _this2._duration;
             var codecarray = unit.data.subarray(1, 4);
             var codecstring = 'avc1.';
             for (i = 0; i < 3; i++) {
@@ -3628,7 +3463,7 @@ var tsdemuxer_TSDemuxer = function () {
           if (avcSample) {
             pushAccesUnit(avcSample, track);
           }
-          avcSample = _this.avcSample = createAVCSample(false, pes.pts, pes.dts, debug ? 'AUD ' : '');
+          avcSample = _this2.avcSample = createAVCSample(false, pes.pts, pes.dts, debug ? 'AUD ' : '');
           break;
         // Filler Data
         case 12:
@@ -3671,20 +3506,106 @@ var tsdemuxer_TSDemuxer = function () {
     }
   };
 
-  TSDemuxer.prototype._getLastNalUnit = function _getLastNalUnit() {
-    var avcSample = this.avcSample,
-        lastUnit = void 0;
-    // try to fallback to previous sample if current one is empty
-    if (!avcSample || avcSample.units.length === 0) {
-      var track = this._avcTrack,
-          samples = track.samples;
-      avcSample = samples[samples.length - 1];
+  TSDemuxer.prototype._parseHEVCNALu = function _parseHEVCNALu(array) {
+    var i = 0,
+        len = array.byteLength,
+        value,
+        overflow,
+        state = this.avcNaluState;
+    var units = [],
+        unit,
+        unitType,
+        lastUnitStart,
+        lastUnitType;
+    //logger.log('PES:' + Hex.hexDump(array));
+    while (i < len) {
+      value = array[i++];
+      // finding 3 or 4-byte start codes (00 00 01 OR 00 00 00 01)
+      switch (state) {
+        case 0:
+          if (value === 0) {
+            state = 1;
+          }
+          break;
+        case 1:
+          if (value === 0) {
+            state = 2;
+          } else {
+            state = 0;
+          }
+          break;
+        case 2:
+        case 3:
+          if (value === 0) {
+            state = 3;
+          } else if (value === 1 && i < len) {
+            unitType = array[i] >>> 1 & 0x3F;
+            logger["b" /* logger */].log('find NALU @ offset:' + i + ',type:' + unitType);
+            if (lastUnitStart) {
+              unit = { data: array.subarray(lastUnitStart, i - state - 1), type: lastUnitType };
+              //logger.log('pushing NALU, type/size:' + unit.type + '/' + unit.data.byteLength);
+              units.push(unit);
+            } else {
+              // lastUnitStart is undefined => this is the first start code found in this PES packet
+              // first check if start code delimiter is overlapping between 2 PES packets,
+              // ie it started in last packet (lastState not zero)
+              // and ended at the beginning of this PES packet (i <= 4 - lastState)
+              var lastState = this.avcNaluState;
+              if (lastState && i <= 4 - lastState) {
+                // start delimiter overlapping between PES packets
+                // strip start delimiter bytes from the end of last NAL unit
+                var track = this._videoTrack,
+                    samples = track.samples;
+                if (samples.length) {
+                  var lastavcSample = samples[samples.length - 1],
+                      lastUnits = lastavcSample.units.units,
+                      lastUnit = lastUnits[lastUnits.length - 1];
+                  // check if lastUnit had a state different from zero
+                  if (lastUnit.state) {
+                    // strip last bytes
+                    lastUnit.data = lastUnit.data.subarray(0, lastUnit.data.byteLength - lastState);
+                    lastavcSample.units.length -= lastState;
+                    track.len -= lastState;
+                  }
+                }
+              }
+              // If NAL units are not starting right at the beginning of the PES packet, push preceding data into previous NAL unit.
+              overflow = i - state - 1;
+              if (overflow > 0) {
+                var _track = this._avcTrack,
+                    _samples = _track.samples;
+                //logger.log('first NALU found with overflow:' + overflow);
+                if (_samples.length) {
+                  var _lastavcSample = _samples[_samples.length - 1],
+                      _lastUnits = _lastavcSample.units.units,
+                      _lastUnit = _lastUnits[_lastUnits.length - 1],
+                      tmp = new Uint8Array(_lastUnit.data.byteLength + overflow);
+                  tmp.set(_lastUnit.data, 0);
+                  tmp.set(array.subarray(0, overflow), _lastUnit.data.byteLength);
+                  _lastUnit.data = tmp;
+                  _lastavcSample.units.length += overflow;
+                  _track.len += overflow;
+                }
+              }
+            }
+            lastUnitStart = i;
+            lastUnitType = unitType;
+            state = 0;
+          } else {
+            state = 0;
+          }
+          break;
+        default:
+          break;
+      }
     }
-    if (avcSample) {
-      var units = avcSample.units;
-      lastUnit = units[units.length - 1];
+    if (lastUnitStart) {
+      unit = { data: array.subarray(lastUnitStart, len), type: lastUnitType, state: state };
+      units.push(unit);
+      //logger.log('pushing NALU, type/size/state:' + unit.type + '/' + unit.data.byteLength + '/' + state);
+      this.avcNaluState = state;
     }
-    return lastUnit;
+    return units;
   };
 
   TSDemuxer.prototype._parseAVCNALu = function _parseAVCNALu(array) {
@@ -3780,12 +3701,12 @@ var tsdemuxer_TSDemuxer = function () {
     // no NALu found
     if (units.length === 0) {
       // append pes.data to previous NAL unit
-      var _lastUnit = this._getLastNalUnit();
-      if (_lastUnit) {
-        var _tmp = new Uint8Array(_lastUnit.data.byteLength + array.byteLength);
-        _tmp.set(_lastUnit.data, 0);
-        _tmp.set(array, _lastUnit.data.byteLength);
-        _lastUnit.data = _tmp;
+      var _lastUnit2 = this._getLastNalUnit();
+      if (_lastUnit2) {
+        var _tmp = new Uint8Array(_lastUnit2.data.byteLength + array.byteLength);
+        _tmp.set(_lastUnit2.data, 0);
+        _tmp.set(array, _lastUnit2.data.byteLength);
+        _lastUnit2.data = _tmp;
       }
     }
     track.naluState = state;
@@ -4098,6 +4019,8 @@ function mp4_generator__classCallCheck(instance, Constructor) { if (!(instance i
  * Generate MP4 Box
 */
 
+// import {logger} from '../utils/logger';
+
 //import Hex from '../utils/hex';
 
 var mp4_generator_UINT32_MAX = Math.pow(2, 32) - 1;
@@ -4111,6 +4034,8 @@ var MP4 = function () {
     MP4.types = {
       avc1: [], // codingname
       avcC: [],
+      hvcC: [],
+      hev1: [],
       btrt: [],
       dinf: [],
       dref: [],
@@ -4216,9 +4141,11 @@ var MP4 = function () {
 
     var majorBrand = new Uint8Array([105, 115, 111, 109]); // isom
     var avc1Brand = new Uint8Array([97, 118, 99, 49]); // avc1
+    var hev1Brand = new Uint8Array([0x68, 0x65, 0x76, 0x31]); // hev1
     var minorVersion = new Uint8Array([0, 0, 0, 1]);
 
-    MP4.FTYP = MP4.box(MP4.types.ftyp, majorBrand, minorVersion, majorBrand, avc1Brand);
+    MP4.FTYPAVC1 = MP4.box(MP4.types.ftyp, majorBrand, minorVersion, majorBrand, avc1Brand);
+    MP4.FTYPHEV1 = MP4.box(MP4.types.ftyp, majorBrand, minorVersion, majorBrand, hev1Brand);
     MP4.DINF = MP4.box(MP4.types.dinf, MP4.box(MP4.types.dref, dref));
   };
 
@@ -4355,6 +4282,80 @@ var MP4 = function () {
     return MP4.box(MP4.types.stbl, MP4.stsd(track), MP4.box(MP4.types.stts, MP4.STTS), MP4.box(MP4.types.stsc, MP4.STSC), MP4.box(MP4.types.stsz, MP4.STSZ), MP4.box(MP4.types.stco, MP4.STCO));
   };
 
+  MP4.hev1 = function hev1(track) {
+    var vps = [],
+        sps = [],
+        pps = [],
+        i,
+        data,
+        len;
+
+    vps.push(0x00);
+    vps.push(0x00);
+    vps.push(track.vps.length);
+    for (i = 0; i < track.vps.length; i++) {
+      data = track.vps[i];
+      len = data.byteLength;
+      vps.push(len >>> 8 & 0xFF);
+      vps.push(len & 0xFF);
+      vps = vps.concat(Array.prototype.slice.call(data)); // VPS
+    }
+
+    // assemble the SPSs
+    sps.push(0x00);
+    sps.push(0x00);
+    sps.push(track.sps.length);
+    for (i = 0; i < track.sps.length; i++) {
+      data = track.sps[i];
+      len = data.byteLength;
+      sps.push(len >>> 8 & 0xFF);
+      sps.push(len & 0xFF);
+      sps = sps.concat(Array.prototype.slice.call(data)); // SPS
+    }
+
+    // assemble the PPSs
+    pps.push(0x00);
+    pps.push(0x00);
+    pps.push(track.pps.length);
+    for (i = 0; i < track.pps.length; i++) {
+      data = track.pps[i];
+      len = data.byteLength;
+      pps.push(len >>> 8 & 0xFF);
+      pps.push(len & 0xFF);
+      pps = pps.concat(Array.prototype.slice.call(data)); // PPS
+    }
+
+    var iNumArrays = track.vps.length + track.sps.length + track.pps.length;
+
+    var hvcc = MP4.box(MP4.types.hvcC, new Uint8Array([0x01, // version
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // general_configuration
+    0xf0, 0x00, // spatial segmentation
+    0xfc | track.chromaFormatIdc & 0x03, 0xf8 | track.bitDepthLumaMinus8 & 0x07, 0xf8 | track.bitDepthChromaMinus8 & 0x07, 0x00, 0x00, // framerate
+    0x00, // numTemporalLayer b_temporalIdNested
+    iNumArrays].concat(vps).concat(sps).concat(pps)));
+
+    return MP4.box(MP4.types.hev1, new Uint8Array([0x00, 0x00, 0x00, // reserved
+    0x00, 0x00, 0x00, // reserved
+    0x00, 0x01, // data_reference_index
+    0x00, 0x00, // pre_defined
+    0x00, 0x00, // reserved
+    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // pre_defined
+    track.width >> 8 & 0xFF, track.width & 0xff, // width
+    track.height >> 8 & 0xFF, track.height & 0xff, // height
+    0x00, 0x48, 0x00, 0x00, // horizresolution
+    0x00, 0x48, 0x00, 0x00, // vertresolution
+    0x00, 0x00, 0x00, 0x00, // reserved
+    0x00, 0x01, // frame_count
+    0x12, 0x64, 0x61, 0x69, 0x6C, //dailymotion/hls.js
+    0x79, 0x6D, 0x6F, 0x74, 0x69, 0x6F, 0x6E, 0x2F, 0x68, 0x6C, 0x73, 0x2E, 0x6A, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // compressorname
+    0x00, 0x18, // depth = 24
+    0x11, 0x11]), // pre_defined = -1
+    hvcc, MP4.box(MP4.types.btrt, new Uint8Array([0x00, 0x1c, 0x9c, 0x80, // bufferSizeDB
+    0x00, 0x2d, 0xc6, 0xc0, // maxBitrate
+    0x00, 0x2d, 0xc6, 0xc0])) // avgBitrate
+    );
+  };
+
   MP4.avc1 = function avc1(track) {
     var sps = [],
         pps = [],
@@ -4473,6 +4474,9 @@ var MP4 = function () {
       }
       return MP4.box(MP4.types.stsd, MP4.STSD, MP4.mp4a(track));
     } else {
+      if (track.streamType === 0x24) {
+        return MP4.box(MP4.types.stsd, MP4.STSD, MP4.hev1(track));
+      }
       return MP4.box(MP4.types.stsd, MP4.STSD, MP4.avc1(track));
     }
   };
@@ -4580,11 +4584,19 @@ var MP4 = function () {
     if (!MP4.types) {
       MP4.init();
     }
+
     var movie = MP4.moov(tracks),
         result;
-    result = new Uint8Array(MP4.FTYP.byteLength + movie.byteLength);
-    result.set(MP4.FTYP);
-    result.set(movie, MP4.FTYP.byteLength);
+
+    if (tracks[0].type === 'video' && tracks[0].streamType === 0x24) {
+      result = new Uint8Array(MP4.FTYPHEV1.byteLength + movie.byteLength);
+      result.set(MP4.FTYPHEV1);
+      result.set(movie, MP4.FTYPHEV1.byteLength);
+    } else {
+      result = new Uint8Array(MP4.FTYPAVC1.byteLength + movie.byteLength);
+      result.set(MP4.FTYPAVC1);
+      result.set(movie, MP4.FTYPAVC1.byteLength);
+    }
     return result;
   };
 
@@ -4808,10 +4820,10 @@ var mp4_remuxer_MP4Remuxer = function () {
     // if parsed fragment is contiguous with last one, let's use last DTS value as reference
     var nextAvcDts = this.nextAvcDts;
 
-    var isSafari = this.isSafari;
+    // const isSafari = this.isSafari;
 
     // Safari does not like overlapping DTS on consecutive fragments. let's use nextAvcDts to overcome this if fragments are consecutive
-    if (isSafari) {
+    if (this.isSafari) {
       // also consider consecutive fragments as being contiguous (even if a level switch occurs),
       // for sake of clarity:
       // consecutive fragments are frags with
@@ -4878,8 +4890,23 @@ var mp4_remuxer_MP4Remuxer = function () {
 
     // compute lastPTS/lastDTS
     sample = inputSamples[inputSamples.length - 1];
-    lastDTS = Math.max(sample.dts, 0);
-    lastPTS = Math.max(sample.pts, 0, lastDTS);
+    lastDTS = Math.max(this._PTSNormalize(sample.dts, nextAvcDts) - this._initDTS, 0);
+    lastPTS = Math.max(this._PTSNormalize(sample.pts, nextAvcDts) - this._initDTS, 0);
+    lastPTS = Math.max(lastPTS, lastDTS);
+
+    var vendor = void 0,
+        userAgent = void 0,
+        isSafari = void 0,
+        isChrome = void 0;
+    try {
+      vendor = navigator.vendor;
+      userAgent = navigator.userAgent;
+      isSafari = vendor && vendor.indexOf('Apple') > -1 && userAgent && !userAgent.match('CriOS');
+      isChrome = userAgent.toLowerCase().indexOf('chrome') > -1;
+    } catch (e) {
+      isSafari = 0;
+      isChrome = 0;
+    }
 
     // on Safari let's signal the same sample duration for all samples
     // sample duration (as expected by trun MP4 boxes), should be the delta between sample DTS
@@ -5004,7 +5031,7 @@ var mp4_remuxer_MP4Remuxer = function () {
     track.len = 0;
     track.nbNalu = 0;
     track.dropped = 0;
-    if (outputSamples.length && navigator.userAgent.toLowerCase().indexOf('chrome') > -1) {
+    if (outputSamples.length && isChrome) {
       var flags = outputSamples[0].flags;
       // chrome workaround, mark first sample as being a Random Access Point to avoid sourcebuffer append issue
       // https://code.google.com/p/chromium/issues/detail?id=229412
@@ -5554,6 +5581,440 @@ var demuxer_inline_DemuxerInline = function () {
 /* harmony default export */ var demuxer_inline = __webpack_exports__["a"] = (demuxer_inline_DemuxerInline);
 
 /***/ }),
+/* 7 */
+/***/ (function(module, __webpack_exports__, __webpack_require__) {
+
+"use strict";
+
+// CONCATENATED MODULE: ./src/crypt/aes-crypto.js
+function _classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var AESCrypto = function () {
+  function AESCrypto(subtle, iv) {
+    _classCallCheck(this, AESCrypto);
+
+    this.subtle = subtle;
+    this.aesIV = iv;
+  }
+
+  AESCrypto.prototype.decrypt = function decrypt(data, key) {
+    return this.subtle.decrypt({ name: 'AES-CBC', iv: this.aesIV }, key, data);
+  };
+
+  return AESCrypto;
+}();
+
+/* harmony default export */ var aes_crypto = (AESCrypto);
+// CONCATENATED MODULE: ./src/crypt/fast-aes-key.js
+function fast_aes_key__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var FastAESKey = function () {
+  function FastAESKey(subtle, key) {
+    fast_aes_key__classCallCheck(this, FastAESKey);
+
+    this.subtle = subtle;
+    this.key = key;
+  }
+
+  FastAESKey.prototype.expandKey = function expandKey() {
+    return this.subtle.importKey('raw', this.key, { name: 'AES-CBC' }, false, ['encrypt', 'decrypt']);
+  };
+
+  return FastAESKey;
+}();
+
+/* harmony default export */ var fast_aes_key = (FastAESKey);
+// CONCATENATED MODULE: ./src/crypt/aes-decryptor.js
+function aes_decryptor__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+var AESDecryptor = function () {
+  function AESDecryptor() {
+    aes_decryptor__classCallCheck(this, AESDecryptor);
+
+    // Static after running initTable
+    this.rcon = [0x0, 0x1, 0x2, 0x4, 0x8, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
+    this.subMix = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+    this.invSubMix = [new Uint32Array(256), new Uint32Array(256), new Uint32Array(256), new Uint32Array(256)];
+    this.sBox = new Uint32Array(256);
+    this.invSBox = new Uint32Array(256);
+
+    // Changes during runtime
+    this.key = new Uint32Array(0);
+
+    this.initTable();
+  }
+
+  // Using view.getUint32() also swaps the byte order.
+
+
+  AESDecryptor.prototype.uint8ArrayToUint32Array_ = function uint8ArrayToUint32Array_(arrayBuffer) {
+    var view = new DataView(arrayBuffer);
+    var newArray = new Uint32Array(4);
+    for (var i = 0; i < 4; i++) {
+      newArray[i] = view.getUint32(i * 4);
+    }
+    return newArray;
+  };
+
+  AESDecryptor.prototype.initTable = function initTable() {
+    var sBox = this.sBox;
+    var invSBox = this.invSBox;
+    var subMix = this.subMix;
+    var subMix0 = subMix[0];
+    var subMix1 = subMix[1];
+    var subMix2 = subMix[2];
+    var subMix3 = subMix[3];
+    var invSubMix = this.invSubMix;
+    var invSubMix0 = invSubMix[0];
+    var invSubMix1 = invSubMix[1];
+    var invSubMix2 = invSubMix[2];
+    var invSubMix3 = invSubMix[3];
+
+    var d = new Uint32Array(256);
+    var x = 0;
+    var xi = 0;
+    var i = 0;
+    for (i = 0; i < 256; i++) {
+      if (i < 128) {
+        d[i] = i << 1;
+      } else {
+        d[i] = i << 1 ^ 0x11b;
+      }
+    }
+
+    for (i = 0; i < 256; i++) {
+      var sx = xi ^ xi << 1 ^ xi << 2 ^ xi << 3 ^ xi << 4;
+      sx = sx >>> 8 ^ sx & 0xff ^ 0x63;
+      sBox[x] = sx;
+      invSBox[sx] = x;
+
+      // Compute multiplication
+      var x2 = d[x];
+      var x4 = d[x2];
+      var x8 = d[x4];
+
+      // Compute sub/invSub bytes, mix columns tables
+      var t = d[sx] * 0x101 ^ sx * 0x1010100;
+      subMix0[x] = t << 24 | t >>> 8;
+      subMix1[x] = t << 16 | t >>> 16;
+      subMix2[x] = t << 8 | t >>> 24;
+      subMix3[x] = t;
+
+      // Compute inv sub bytes, inv mix columns tables
+      t = x8 * 0x1010101 ^ x4 * 0x10001 ^ x2 * 0x101 ^ x * 0x1010100;
+      invSubMix0[sx] = t << 24 | t >>> 8;
+      invSubMix1[sx] = t << 16 | t >>> 16;
+      invSubMix2[sx] = t << 8 | t >>> 24;
+      invSubMix3[sx] = t;
+
+      // Compute next counter
+      if (!x) {
+        x = xi = 1;
+      } else {
+        x = x2 ^ d[d[d[x8 ^ x2]]];
+        xi ^= d[d[xi]];
+      }
+    }
+  };
+
+  AESDecryptor.prototype.expandKey = function expandKey(keyBuffer) {
+    // convert keyBuffer to Uint32Array
+    var key = this.uint8ArrayToUint32Array_(keyBuffer);
+    var sameKey = true;
+    var offset = 0;
+
+    while (offset < key.length && sameKey) {
+      sameKey = key[offset] === this.key[offset];
+      offset++;
+    }
+
+    if (sameKey) {
+      return;
+    }
+
+    this.key = key;
+    var keySize = this.keySize = key.length;
+
+    if (keySize !== 4 && keySize !== 6 && keySize !== 8) {
+      throw new Error('Invalid aes key size=' + keySize);
+    }
+
+    var ksRows = this.ksRows = (keySize + 6 + 1) * 4;
+    var ksRow = void 0;
+    var invKsRow = void 0;
+
+    var keySchedule = this.keySchedule = new Uint32Array(ksRows);
+    var invKeySchedule = this.invKeySchedule = new Uint32Array(ksRows);
+    var sbox = this.sBox;
+    var rcon = this.rcon;
+
+    var invSubMix = this.invSubMix;
+    var invSubMix0 = invSubMix[0];
+    var invSubMix1 = invSubMix[1];
+    var invSubMix2 = invSubMix[2];
+    var invSubMix3 = invSubMix[3];
+
+    var prev = void 0;
+    var t = void 0;
+
+    for (ksRow = 0; ksRow < ksRows; ksRow++) {
+      if (ksRow < keySize) {
+        prev = keySchedule[ksRow] = key[ksRow];
+        continue;
+      }
+      t = prev;
+
+      if (ksRow % keySize === 0) {
+        // Rot word
+        t = t << 8 | t >>> 24;
+
+        // Sub word
+        t = sbox[t >>> 24] << 24 | sbox[t >>> 16 & 0xff] << 16 | sbox[t >>> 8 & 0xff] << 8 | sbox[t & 0xff];
+
+        // Mix Rcon
+        t ^= rcon[ksRow / keySize | 0] << 24;
+      } else if (keySize > 6 && ksRow % keySize === 4) {
+        // Sub word
+        t = sbox[t >>> 24] << 24 | sbox[t >>> 16 & 0xff] << 16 | sbox[t >>> 8 & 0xff] << 8 | sbox[t & 0xff];
+      }
+
+      keySchedule[ksRow] = prev = (keySchedule[ksRow - keySize] ^ t) >>> 0;
+    }
+
+    for (invKsRow = 0; invKsRow < ksRows; invKsRow++) {
+      ksRow = ksRows - invKsRow;
+      if (invKsRow & 3) {
+        t = keySchedule[ksRow];
+      } else {
+        t = keySchedule[ksRow - 4];
+      }
+
+      if (invKsRow < 4 || ksRow <= 4) {
+        invKeySchedule[invKsRow] = t;
+      } else {
+        invKeySchedule[invKsRow] = invSubMix0[sbox[t >>> 24]] ^ invSubMix1[sbox[t >>> 16 & 0xff]] ^ invSubMix2[sbox[t >>> 8 & 0xff]] ^ invSubMix3[sbox[t & 0xff]];
+      }
+
+      invKeySchedule[invKsRow] = invKeySchedule[invKsRow] >>> 0;
+    }
+  };
+
+  // Adding this as a method greatly improves performance.
+
+
+  AESDecryptor.prototype.networkToHostOrderSwap = function networkToHostOrderSwap(word) {
+    return word << 24 | (word & 0xff00) << 8 | (word & 0xff0000) >> 8 | word >>> 24;
+  };
+
+  AESDecryptor.prototype.decrypt = function decrypt(inputArrayBuffer, offset, aesIV) {
+    var nRounds = this.keySize + 6;
+    var invKeySchedule = this.invKeySchedule;
+    var invSBOX = this.invSBox;
+
+    var invSubMix = this.invSubMix;
+    var invSubMix0 = invSubMix[0];
+    var invSubMix1 = invSubMix[1];
+    var invSubMix2 = invSubMix[2];
+    var invSubMix3 = invSubMix[3];
+
+    var initVector = this.uint8ArrayToUint32Array_(aesIV);
+    var initVector0 = initVector[0];
+    var initVector1 = initVector[1];
+    var initVector2 = initVector[2];
+    var initVector3 = initVector[3];
+
+    var inputInt32 = new Int32Array(inputArrayBuffer);
+    var outputInt32 = new Int32Array(inputInt32.length);
+
+    var t0 = void 0,
+        t1 = void 0,
+        t2 = void 0,
+        t3 = void 0;
+    var s0 = void 0,
+        s1 = void 0,
+        s2 = void 0,
+        s3 = void 0;
+    var inputWords0 = void 0,
+        inputWords1 = void 0,
+        inputWords2 = void 0,
+        inputWords3 = void 0;
+
+    var ksRow, i;
+    var swapWord = this.networkToHostOrderSwap;
+
+    while (offset < inputInt32.length) {
+      inputWords0 = swapWord(inputInt32[offset]);
+      inputWords1 = swapWord(inputInt32[offset + 1]);
+      inputWords2 = swapWord(inputInt32[offset + 2]);
+      inputWords3 = swapWord(inputInt32[offset + 3]);
+
+      s0 = inputWords0 ^ invKeySchedule[0];
+      s1 = inputWords3 ^ invKeySchedule[1];
+      s2 = inputWords2 ^ invKeySchedule[2];
+      s3 = inputWords1 ^ invKeySchedule[3];
+
+      ksRow = 4;
+
+      // Iterate through the rounds of decryption
+      for (i = 1; i < nRounds; i++) {
+        t0 = invSubMix0[s0 >>> 24] ^ invSubMix1[s1 >> 16 & 0xff] ^ invSubMix2[s2 >> 8 & 0xff] ^ invSubMix3[s3 & 0xff] ^ invKeySchedule[ksRow];
+        t1 = invSubMix0[s1 >>> 24] ^ invSubMix1[s2 >> 16 & 0xff] ^ invSubMix2[s3 >> 8 & 0xff] ^ invSubMix3[s0 & 0xff] ^ invKeySchedule[ksRow + 1];
+        t2 = invSubMix0[s2 >>> 24] ^ invSubMix1[s3 >> 16 & 0xff] ^ invSubMix2[s0 >> 8 & 0xff] ^ invSubMix3[s1 & 0xff] ^ invKeySchedule[ksRow + 2];
+        t3 = invSubMix0[s3 >>> 24] ^ invSubMix1[s0 >> 16 & 0xff] ^ invSubMix2[s1 >> 8 & 0xff] ^ invSubMix3[s2 & 0xff] ^ invKeySchedule[ksRow + 3];
+        // Update state
+        s0 = t0;
+        s1 = t1;
+        s2 = t2;
+        s3 = t3;
+
+        ksRow = ksRow + 4;
+      }
+
+      // Shift rows, sub bytes, add round key
+      t0 = invSBOX[s0 >>> 24] << 24 ^ invSBOX[s1 >> 16 & 0xff] << 16 ^ invSBOX[s2 >> 8 & 0xff] << 8 ^ invSBOX[s3 & 0xff] ^ invKeySchedule[ksRow];
+      t1 = invSBOX[s1 >>> 24] << 24 ^ invSBOX[s2 >> 16 & 0xff] << 16 ^ invSBOX[s3 >> 8 & 0xff] << 8 ^ invSBOX[s0 & 0xff] ^ invKeySchedule[ksRow + 1];
+      t2 = invSBOX[s2 >>> 24] << 24 ^ invSBOX[s3 >> 16 & 0xff] << 16 ^ invSBOX[s0 >> 8 & 0xff] << 8 ^ invSBOX[s1 & 0xff] ^ invKeySchedule[ksRow + 2];
+      t3 = invSBOX[s3 >>> 24] << 24 ^ invSBOX[s0 >> 16 & 0xff] << 16 ^ invSBOX[s1 >> 8 & 0xff] << 8 ^ invSBOX[s2 & 0xff] ^ invKeySchedule[ksRow + 3];
+      ksRow = ksRow + 3;
+
+      // Write
+      outputInt32[offset] = swapWord(t0 ^ initVector0);
+      outputInt32[offset + 1] = swapWord(t3 ^ initVector1);
+      outputInt32[offset + 2] = swapWord(t2 ^ initVector2);
+      outputInt32[offset + 3] = swapWord(t1 ^ initVector3);
+
+      // reset initVector to last 4 unsigned int
+      initVector0 = inputWords0;
+      initVector1 = inputWords1;
+      initVector2 = inputWords2;
+      initVector3 = inputWords3;
+
+      offset = offset + 4;
+    }
+
+    return outputInt32.buffer;
+  };
+
+  AESDecryptor.prototype.destroy = function destroy() {
+    this.key = undefined;
+    this.keySize = undefined;
+    this.ksRows = undefined;
+
+    this.sBox = undefined;
+    this.invSBox = undefined;
+    this.subMix = undefined;
+    this.invSubMix = undefined;
+    this.keySchedule = undefined;
+    this.invKeySchedule = undefined;
+
+    this.rcon = undefined;
+  };
+
+  return AESDecryptor;
+}();
+
+/* harmony default export */ var aes_decryptor = (AESDecryptor);
+// EXTERNAL MODULE: ./src/errors.js
+var errors = __webpack_require__(2);
+
+// EXTERNAL MODULE: ./src/utils/logger.js
+var logger = __webpack_require__(0);
+
+// CONCATENATED MODULE: ./src/crypt/decrypter.js
+function decrypter__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
+
+
+
+
+
+
+
+
+/*globals self: false */
+
+var decrypter_Decrypter = function () {
+  function Decrypter(observer, config) {
+    decrypter__classCallCheck(this, Decrypter);
+
+    this.observer = observer;
+    this.config = config;
+    this.logEnabled = true;
+    try {
+      var browserCrypto = crypto ? crypto : self.crypto;
+      this.subtle = browserCrypto.subtle || browserCrypto.webkitSubtle;
+    } catch (e) {}
+    this.disableWebCrypto = !this.subtle;
+  }
+
+  Decrypter.prototype.isSync = function isSync() {
+    return this.disableWebCrypto && this.config.enableSoftwareAES;
+  };
+
+  Decrypter.prototype.decrypt = function decrypt(data, key, iv, callback) {
+    var _this = this;
+
+    if (this.disableWebCrypto && this.config.enableSoftwareAES) {
+      if (this.logEnabled) {
+        logger["b" /* logger */].log('JS AES decrypt');
+        this.logEnabled = false;
+      }
+      var decryptor = this.decryptor;
+      if (!decryptor) {
+        this.decryptor = decryptor = new aes_decryptor();
+      }
+      decryptor.expandKey(key);
+      callback(decryptor.decrypt(data, 0, iv));
+    } else {
+      if (this.logEnabled) {
+        logger["b" /* logger */].log('WebCrypto AES decrypt');
+        this.logEnabled = false;
+      }
+      var subtle = this.subtle;
+      if (this.key !== key) {
+        this.key = key;
+        this.fastAesKey = new fast_aes_key(subtle, key);
+      }
+
+      this.fastAesKey.expandKey().then(function (aesKey) {
+        // decrypt using web crypto
+        var crypto = new aes_crypto(subtle, iv);
+        crypto.decrypt(data, aesKey).catch(function (err) {
+          _this.onWebCryptoError(err, data, key, iv, callback);
+        }).then(function (result) {
+          callback(result);
+        });
+      }).catch(function (err) {
+        _this.onWebCryptoError(err, data, key, iv, callback);
+      });
+    }
+  };
+
+  Decrypter.prototype.onWebCryptoError = function onWebCryptoError(err, data, key, iv, callback) {
+    if (this.config.enableSoftwareAES) {
+      logger["b" /* logger */].log('WebCrypto Error, disable WebCrypto API');
+      this.disableWebCrypto = true;
+      this.logEnabled = true;
+      this.decrypt(data, key, iv, callback);
+    } else {
+      logger["b" /* logger */].error('decrypting error : ' + err.message);
+      this.observer.trigger(Event.ERROR, { type: errors["b" /* ErrorTypes */].MEDIA_ERROR, details: errors["a" /* ErrorDetails */].FRAG_DECRYPT_ERROR, fatal: true, reason: err.message });
+    }
+  };
+
+  Decrypter.prototype.destroy = function destroy() {
+    var decryptor = this.decryptor;
+    if (decryptor) {
+      decryptor.destroy();
+      this.decryptor = undefined;
+    }
+  };
+
+  return Decrypter;
+}();
+
+/* harmony default export */ var decrypter = __webpack_exports__["a"] = (decrypter_Decrypter);
+
+/***/ }),
 /* 8 */
 /***/ (function(module, __webpack_exports__, __webpack_require__) {
 
@@ -5563,7 +6024,7 @@ var cues_namespaceObject = {};
 __webpack_require__.d(cues_namespaceObject, "newCue", function() { return newCue; });
 
 // EXTERNAL MODULE: ./node_modules/url-toolkit/src/url-toolkit.js
-var url_toolkit = __webpack_require__(6);
+var url_toolkit = __webpack_require__(5);
 var url_toolkit_default = /*#__PURE__*/__webpack_require__.n(url_toolkit);
 
 // EXTERNAL MODULE: ./src/events.js
@@ -6762,29 +7223,40 @@ var BinarySearch = {
 
 var BufferHelper = {
   isBuffered: function isBuffered(media, position) {
-    if (media) {
-      var buffered = media.buffered;
-      for (var i = 0; i < buffered.length; i++) {
-        if (position >= buffered.start(i) && position <= buffered.end(i)) {
-          return true;
+    try {
+      if (media) {
+        var buffered = media.buffered;
+        for (var i = 0; i < buffered.length; i++) {
+          if (position >= buffered.start(i) && position <= buffered.end(i)) {
+            return true;
+          }
         }
       }
+    } catch (error) {
+      // this is to catch
+      // InvalidStateError: Failed to read the 'buffered' property from 'SourceBuffer':
+      // This SourceBuffer has been removed from the parent media source
     }
     return false;
   },
 
   bufferInfo: function bufferInfo(media, pos, maxHoleDuration) {
-    if (media) {
-      var vbuffered = media.buffered,
-          buffered = [],
-          i;
-      for (i = 0; i < vbuffered.length; i++) {
-        buffered.push({ start: vbuffered.start(i), end: vbuffered.end(i) });
+    try {
+      if (media) {
+        var vbuffered = media.buffered,
+            buffered = [],
+            i;
+        for (i = 0; i < vbuffered.length; i++) {
+          buffered.push({ start: vbuffered.start(i), end: vbuffered.end(i) });
+        }
+        return this.bufferedInfo(buffered, pos, maxHoleDuration);
       }
-      return this.bufferedInfo(buffered, pos, maxHoleDuration);
-    } else {
-      return { len: 0, start: pos, end: pos, nextStart: undefined };
+    } catch (error) {
+      // this is to catch
+      // InvalidStateError: Failed to read the 'buffered' property from 'SourceBuffer':
+      // This SourceBuffer has been removed from the parent media source
     }
+    return { len: 0, start: pos, end: pos, nextStart: undefined };
   },
 
   bufferedInfo: function bufferedInfo(buffered, pos, maxHoleDuration) {
@@ -6850,10 +7322,10 @@ var BufferHelper = {
 
 /* harmony default export */ var buffer_helper = (BufferHelper);
 // EXTERNAL MODULE: ./src/demux/demuxer-inline.js + 12 modules
-var demuxer_inline = __webpack_require__(7);
+var demuxer_inline = __webpack_require__(6);
 
 // EXTERNAL MODULE: ./node_modules/events/events.js
-var events_events = __webpack_require__(5);
+var events_events = __webpack_require__(4);
 var events_default = /*#__PURE__*/__webpack_require__.n(events_events);
 
 // EXTERNAL MODULE: ./node_modules/webworkify-webpack/index.js
@@ -9876,6 +10348,8 @@ var buffer_controller_BufferController = function (_EventHandler) {
     _this._msDuration = null;
     // the value that we want to set mediaSource.duration to
     _this._levelDuration = null;
+    // current stream state: true - for live broadcast, false - for VoD content
+    _this._live = null;
     // cache the self generated object url to detect hijack of video tag
     _this._objectUrl = null;
 
@@ -10209,49 +10683,61 @@ var buffer_controller_BufferController = function (_EventHandler) {
 
   BufferController.prototype.onBufferFlushing = function onBufferFlushing(data) {
     this.flushRange.push({ start: data.startOffset, end: data.endOffset, type: data.type });
-    // attempt flush immediatly
+    // attempt flush immediately
     this.flushBufferCounter = 0;
     this.doFlush();
   };
 
-  BufferController.prototype.onLevelUpdated = function onLevelUpdated(event) {
-    var details = event.details;
-    if (details.fragments.length === 0) {
-      return;
+  BufferController.prototype.onLevelUpdated = function onLevelUpdated(_ref) {
+    var details = _ref.details;
+
+    if (details.fragments.length > 0) {
+      this._levelDuration = details.totalduration + details.fragments[0].start;
+      this._live = details.live;
+      this.updateMediaElementDuration();
     }
-    this._levelDuration = details.totalduration + details.fragments[0].start;
-    this.updateMediaElementDuration();
   };
 
-  // https://github.com/video-dev/hls.js/issues/355
+  /**
+   * Update Media Source duration to current level duration or override to Infinity if configuration parameter
+   * 'liveDurationInfinity` is set to `true`
+   * More details: https://github.com/video-dev/hls.js/issues/355
+   */
 
 
   BufferController.prototype.updateMediaElementDuration = function updateMediaElementDuration() {
-    var media = this.media,
-        mediaSource = this.mediaSource,
-        sourceBuffer = this.sourceBuffer,
-        levelDuration = this._levelDuration;
-    if (levelDuration === null || !media || !mediaSource || !sourceBuffer || media.readyState === 0 || mediaSource.readyState !== 'open') {
+    var config = this.hls.config;
+
+    var duration = void 0;
+
+    if (this._levelDuration === null || !this.media || !this.mediaSource || !this.sourceBuffer || this.media.readyState === 0 || this.mediaSource.readyState !== 'open') {
       return;
     }
-    for (var type in sourceBuffer) {
-      if (sourceBuffer[type].updating) {
+
+    for (var type in this.sourceBuffer) {
+      if (this.sourceBuffer[type].updating === true) {
         // can't set duration whilst a buffer is updating
         return;
       }
     }
+
+    duration = this.media.duration;
+    // initialise to the value that the media source is reporting
     if (this._msDuration === null) {
-      // initialise to the value that the media source is reporting
-      this._msDuration = mediaSource.duration;
+      this._msDuration = this.mediaSource.duration;
     }
-    var duration = media.duration;
-    // levelDuration was the last value we set.
-    // not using mediaSource.duration as the browser may tweak this value
-    // only update mediasource duration if its value increase, this is to avoid
-    // flushing already buffered portion when switching between quality level
-    if (levelDuration > this._msDuration && levelDuration > duration || duration === Infinity || isNaN(duration)) {
-      logger["b" /* logger */].log('Updating mediasource duration to ' + levelDuration.toFixed(3));
-      this._msDuration = mediaSource.duration = levelDuration;
+
+    if (this._live === true && config.liveDurationInfinity === true) {
+      // Override duration to Infinity
+      logger["b" /* logger */].log('Media Source duration is set to Infinity');
+      this._msDuration = this.mediaSource.duration = Infinity;
+    } else if (this._levelDuration > this._msDuration && this._levelDuration > duration || duration === Infinity || isNaN(duration)) {
+      // levelDuration was the last value we set.
+      // not using mediaSource.duration as the browser may tweak this value
+      // only update Media Source duration if its value increase, this is to avoid
+      // flushing already buffered portion when switching between quality level
+      logger["b" /* logger */].log('Updating Media Source duration to ' + this._levelDuration.toFixed(3));
+      this._msDuration = this.mediaSource.duration = this._levelDuration;
     }
   };
 
@@ -14810,7 +15296,7 @@ var subtitle_track_controller_SubtitleTrackController = function (_EventHandler)
 
 /* harmony default export */ var subtitle_track_controller = (subtitle_track_controller_SubtitleTrackController);
 // EXTERNAL MODULE: ./src/crypt/decrypter.js + 3 modules
-var decrypter = __webpack_require__(4);
+var decrypter = __webpack_require__(7);
 
 // CONCATENATED MODULE: ./src/controller/subtitle-stream-controller.js
 function subtitle_stream_controller__classCallCheck(instance, Constructor) { if (!(instance instanceof Constructor)) { throw new TypeError("Cannot call a class as a function"); } }
@@ -15091,6 +15577,7 @@ var hlsDefaultConfig = {
   liveMaxLatencyDurationCount: Infinity, // used by stream-controller
   liveSyncDuration: undefined, // used by stream-controller
   liveMaxLatencyDuration: undefined, // used by stream-controller
+  liveDurationInfinity: false, // used by buffer-controller
   maxMaxBufferLength: 600, // used by stream-controller
   enableWorker: true, // used by demuxer
   enableSoftwareAES: true, // used by decrypter
@@ -15733,38 +16220,81 @@ function webpackBootstrapFunc (modules) {
   return f.default || f // try to call default if defined to also support babel esmodule exports
 }
 
+var moduleNameReqExp = '[\\.|\\-|\\+|\\w|\/|@]+'
+var dependencyRegExp = '\\((\/\\*.*?\\*\/)?\s?.*?(' + moduleNameReqExp + ').*?\\)' // additional chars when output.pathinfo is true
+
 // http://stackoverflow.com/a/2593661/130442
 function quoteRegExp (str) {
   return (str + '').replace(/[.?*+^$[\]\\(){}|-]/g, '\\$&')
 }
 
-function getModuleDependencies (module) {
-  var retval = []
+function getModuleDependencies (sources, module, queueName) {
+  var retval = {}
+  retval[queueName] = []
+
   var fnString = module.toString()
   var wrapperSignature = fnString.match(/^function\s?\(\w+,\s*\w+,\s*(\w+)\)/)
   if (!wrapperSignature) return retval
-
   var webpackRequireName = wrapperSignature[1]
-  var re = new RegExp('(\\\\n|\\W)' + quoteRegExp(webpackRequireName) + '\\((\/\\*.*?\\*\/)?\s?.*?([\\.|\\-|\\w|\/|@]+).*?\\)', 'g') // additional chars when output.pathinfo is true
+
+  // main bundle deps
+  var re = new RegExp('(\\\\n|\\W)' + quoteRegExp(webpackRequireName) + dependencyRegExp, 'g')
   var match
   while ((match = re.exec(fnString))) {
-    retval.push(match[3])
+    if (match[3] === 'dll-reference') continue
+    retval[queueName].push(match[3])
   }
+
+  // dll deps
+  re = new RegExp('\\(' + quoteRegExp(webpackRequireName) + '\\("(dll-reference\\s(' + moduleNameReqExp + '))"\\)\\)' + dependencyRegExp, 'g')
+  while ((match = re.exec(fnString))) {
+    if (!sources[match[2]]) {
+      retval[queueName].push(match[1])
+      sources[match[2]] = __webpack_require__(match[1]).m
+    }
+    retval[match[2]] = retval[match[2]] || []
+    retval[match[2]].push(match[4])
+  }
+
   return retval
 }
 
-function getRequiredModules (sources, moduleId) {
-  var modulesQueue = [moduleId]
-  var requiredModules = []
-  var seenModules = {}
+function hasValuesInQueues (queues) {
+  var keys = Object.keys(queues)
+  return keys.reduce(function (hasValues, key) {
+    return hasValues || queues[key].length > 0
+  }, false)
+}
 
-  while (modulesQueue.length) {
-    var moduleToCheck = modulesQueue.pop()
-    if (seenModules[moduleToCheck] || !sources[moduleToCheck]) continue
-    seenModules[moduleToCheck] = true
-    requiredModules.push(moduleToCheck)
-    var newModules = getModuleDependencies(sources[moduleToCheck])
-    modulesQueue = modulesQueue.concat(newModules)
+function getRequiredModules (sources, moduleId) {
+  var modulesQueue = {
+    main: [moduleId]
+  }
+  var requiredModules = {
+    main: []
+  }
+  var seenModules = {
+    main: {}
+  }
+
+  while (hasValuesInQueues(modulesQueue)) {
+    var queues = Object.keys(modulesQueue)
+    for (var i = 0; i < queues.length; i++) {
+      var queueName = queues[i]
+      var queue = modulesQueue[queueName]
+      var moduleToCheck = queue.pop()
+      seenModules[queueName] = seenModules[queueName] || {}
+      if (seenModules[queueName][moduleToCheck] || !sources[queueName][moduleToCheck]) continue
+      seenModules[queueName][moduleToCheck] = true
+      requiredModules[queueName] = requiredModules[queueName] || []
+      requiredModules[queueName].push(moduleToCheck)
+      var newModules = getModuleDependencies(sources, sources[queueName][moduleToCheck], queueName)
+      var newModulesKeys = Object.keys(newModules)
+      for (var j = 0; j < newModulesKeys.length; j++) {
+        modulesQueue[newModulesKeys[j]] = modulesQueue[newModulesKeys[j]] || []
+        modulesQueue[newModulesKeys[j]] = modulesQueue[newModulesKeys[j]].concat(newModules[newModulesKeys[j]])
+      }
+    }
   }
 
   return requiredModules
@@ -15772,10 +16302,25 @@ function getRequiredModules (sources, moduleId) {
 
 module.exports = function (moduleId, options) {
   options = options || {}
-  var sources = __webpack_require__.m
+  var sources = {
+    main: __webpack_require__.m
+  }
 
-  var requiredModules = options.all ? Object.keys(sources) : getRequiredModules(sources, moduleId)
-  var src = '(' + webpackBootstrapFunc.toString().replace('ENTRY_MODULE', JSON.stringify(moduleId)) + ')({' + requiredModules.map(function (id) { return '' + JSON.stringify(id) + ': ' + sources[id].toString() }).join(',') + '})(self);'
+  var requiredModules = options.all ? { main: Object.keys(sources) } : getRequiredModules(sources, moduleId)
+
+  var src = ''
+
+  Object.keys(requiredModules).filter(function (m) { return m !== 'main' }).forEach(function (module) {
+    var entryModule = 0
+    while (requiredModules[module][entryModule]) {
+      entryModule++
+    }
+    requiredModules[module].push(entryModule)
+    sources[module][entryModule] = '(function(module, exports, __webpack_require__) { module.exports = __webpack_require__; })'
+    src = src + 'var ' + module + ' = (' + webpackBootstrapFunc.toString().replace('ENTRY_MODULE', JSON.stringify(entryModule)) + ')({' + requiredModules[module].map(function (id) { return '' + JSON.stringify(id) + ': ' + sources[module][id].toString() }).join(',') + '});\n'
+  })
+
+  src = src + '(' + webpackBootstrapFunc.toString().replace('ENTRY_MODULE', JSON.stringify(moduleId)) + ')({' + requiredModules.main.map(function (id) { return '' + JSON.stringify(id) + ': ' + sources.main[id].toString() }).join(',') + '})(self);'
 
   var blob = new window.Blob([src], { type: 'text/javascript' })
   if (options.bare) { return blob }
@@ -15796,10 +16341,10 @@ module.exports = function (moduleId, options) {
 
 "use strict";
 Object.defineProperty(__webpack_exports__, "__esModule", { value: true });
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__demux_demuxer_inline__ = __webpack_require__(7);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_0__demux_demuxer_inline__ = __webpack_require__(6);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_1__events__ = __webpack_require__(1);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_2__utils_logger__ = __webpack_require__(0);
-/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_events__ = __webpack_require__(5);
+/* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_events__ = __webpack_require__(4);
 /* harmony import */ var __WEBPACK_IMPORTED_MODULE_3_events___default = __webpack_require__.n(__WEBPACK_IMPORTED_MODULE_3_events__);
 /* demuxer web worker.
  *  - listen to worker message, and trigger DemuxerInline upon reception of Fragments.
